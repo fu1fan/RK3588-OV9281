@@ -1,0 +1,43 @@
+#!/bin/bash
+### BEGIN INIT INFO
+# Provides:             psplash
+# Required-Start:
+# Required-Stop:
+# Default-Start:        S
+# Default-Stop:
+### END INIT INFO
+sleep 1
+/etc/init.d/S49weston stop
+
+exec 2>/dev/null
+
+case "$1" in
+    start)
+        echo "Starting psplash..."
+        export TMPDIR=/mnt/.psplash
+        mkdir -p $TMPDIR
+        mount tmpfs -t tmpfs $TMPDIR -o,size=2M
+        rotation=0
+        if [ -e /etc/rotation ]; then
+            read rotation < /etc/rotation
+        fi
+        /usr/bin/psplash --angle $rotation &
+        ;;
+    stop)
+        echo "Stopping psplash..."
+        killall psplash
+        umount $TMPDIR
+        rmdir $TMPDIR
+        ;;
+    *)
+        echo "Usage: \$0 {start|stop}"
+        exit 1
+        ;;
+esac
+
+sleep 5
+
+pkill psplash
+
+/etc/init.d/S49weston start
+exit 0

@@ -1,0 +1,26 @@
+From a702b5df1dc5163d15f802a0919294c22bb61f72 Mon Sep 17 00:00:00 2001
+From: zyj <zyj@forlinx.com>
+Date: Tue, 31 Jan 2023 15:28:00 +0800
+Subject: [PATCH] OK3588: hciattach fix.
+
+---
+ tools/hciattach.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/tools/hciattach.c b/tools/hciattach.c
+index 276a4e5..09018d3 100644
+--- a/tools/hciattach.c
++++ b/tools/hciattach.c
+@@ -1177,6 +1177,9 @@ static int init_uart(char *dev, struct uart_t *u, int send_break, int raw)
+ 
+ 	tcflush(fd, TCIOFLUSH);
+ 
++	if (u->speed == 0) 
++		u->speed = u->init_speed;
++
+ 	/* Set actual baudrate */
+ 	if (set_speed(fd, &ti, u->speed) < 0) {
+ 		perror("Can't set baud rate");
+-- 
+2.17.1
+

@@ -1,0 +1,39 @@
+#!/bin/sh
+#
+# Start linux matrix...
+#
+
+# Load default env variables from profiles(e.g. /etc/profile.d/weston.sh)
+. /etc/profile
+
+case "$1" in
+  start)
+		printf "Starting matrix: "
+		export LC_ALL='zh_CN.utf8'
+	
+		ifconfig lo 127.0.0.1
+		# Uncomment to disable mirror mode
+		# unset WESTON_DRM_MIRROR
+	
+		export XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/var/run}
+		export QT_QPA_PLATFORM=${QT_QPA_PLATFORM:-wayland}
+
+		{
+			# Wait for weston ready
+			while [ ! -e ${XDG_RUNTIME_DIR}/wayland-0 ]; do
+				sleep .1
+			done
+			/usr/bin/matrix-browser -no-sandbox --disable-gpu 127.0.0.1 >> /dev/null &
+
+		}&
+	;;
+  stop)
+		killall matrix-browser
+		printf "stop finished"
+        ;;
+  *)
+        echo "Usage: $0 {start|stop}"
+        exit 1
+        ;;
+esac
+exit 0

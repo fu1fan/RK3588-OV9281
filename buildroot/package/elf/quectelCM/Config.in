@@ -1,0 +1,4 @@
+config BR2_PACKAGE_QUECTELCM
+	bool "quectelCM"
+	help
+	  ec20/rm500q/rm500u

@@ -1,0 +1,37 @@
+From 489bf548576435b700a5c820aba6e04a2bd6b343 Mon Sep 17 00:00:00 2001
+From: sunrongze <sunrongze@forlinx.com>
+Date: Sun, 26 Apr 2026 20:57:03 -0700
+Subject: [PATCH] =?UTF-8?q?#38104=20:=20OK3588=20:=20=E6=B7=BB=E5=8A=A0CN3?=
+ =?UTF-8?q?969=E6=94=AF=E6=8C=81?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ drivers/media/i2c/dw9763.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/media/i2c/dw9763.c b/drivers/media/i2c/dw9763.c
+index cbbe1c0431740..2ec92e8770a26 100644
+--- a/drivers/media/i2c/dw9763.c
++++ b/drivers/media/i2c/dw9763.c
+@@ -32,6 +32,7 @@
+ #define REG_NULL			0xFF
+ 
+ #define DW9763_CHIP_ID			0xF9
++#define CN3969_CHIP_ID			0xE1
+ #define DW9763_REG_CHIP_ID		0x00
+ 
+ enum mode_e {
+@@ -778,7 +779,7 @@ static int __maybe_unused dw9763_check_id(struct dw9763_device *dw9763_dev)
+ 	__dw9763_set_power(dw9763_dev, true);
+ 	ret = dw9763_read_reg(client, DW9763_REG_CHIP_ID, 1, &pid);
+ 
+-	if (pid != DW9763_CHIP_ID) {
++	if ((pid != DW9763_CHIP_ID) &(pid != CN3969_CHIP_ID)) {
+ 		dev_err(dev, "Unexpected sensor id(%06x), ret(%d)\n", pid, ret);
+ 		return -ENODEV;
+ 	}
+-- 
+GitLab
+

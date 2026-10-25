@@ -1,0 +1,9 @@
+#!/usr/bin/env xdg-open
+[Desktop Entry]
+Name=Terminal
+GenericName=Demo App
+Icon=/usr/share/matrix-gui-2.0/apps/images/forlinx/serial-icon.png
+Exec=qtdemo_terminal
+Type=Application
+ProgramType=gui
+Name[en_US]=qt5_terminal.desktop

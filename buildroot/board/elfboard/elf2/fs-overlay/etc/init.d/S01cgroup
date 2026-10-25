@@ -1,0 +1,37 @@
+#!/bin/sh
+### BEGIN INIT INFO
+# Provides:          cgroup
+# Required-Start:
+# Required-Stop:
+# Default-Start:     S
+# Default-Stop:
+# Short-Description: Mount cgroup v1 controllers for dockerd
+### END INIT INFO
+
+CGROOT=/sys/fs/cgroup
+
+case "$1" in
+    start)
+        mkdir -p "$CGROOT"
+        grep -q "^tmpfs $CGROOT " /proc/mounts || \
+            mount -t tmpfs -o mode=0755 tmpfs "$CGROOT"
+        # Mount every enabled cgroup v1 controller on its own hierarchy
+        while read -r subsys hierarchy num_cgroups enabled; do
+            case "$subsys" in \#*) continue ;; esac
+            [ "$enabled" = "1" ] || continue
+            mkdir -p "$CGROOT/$subsys"
+            if ! grep -q " $CGROOT/$subsys " /proc/mounts; then
+                mount -t cgroup -o "$subsys" cgroup "$CGROOT/$subsys" 2>/dev/null \
+                    || rmdir "$CGROOT/$subsys" 2>/dev/null
+            fi
+        done < /proc/cgroups
+        ;;
+    stop)
+        ;;
+    *)
+        echo "Usage: $0 {start|stop}"
+        exit 1
+        ;;
+esac
+
+exit 0

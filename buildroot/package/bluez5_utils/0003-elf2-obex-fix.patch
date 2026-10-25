@@ -1,0 +1,41 @@
+From f2985d83f23d886da98f3843cfe3ad892b633de4 Mon Sep 17 00:00:00 2001
+From: zyj <zyj@forlinx.com>
+Date: Mon, 30 Jan 2023 16:59:00 +0800
+Subject: [PATCH] OK3588: obex fix.
+
+---
+ gobex/gobex-header.c | 12 +++++++++++-
+ 1 file changed, 11 insertions(+), 1 deletion(-)
+
+diff --git a/gobex/gobex-header.c b/gobex/gobex-header.c
+index 011d33d..6ede114 100644
+--- a/gobex/gobex-header.c
++++ b/gobex/gobex-header.c
+@@ -175,7 +175,7 @@ GObexHeader *g_obex_header_decode(const void *data, gsize len,
+ 				header->id, hdr_len);
+ 			goto failed;
+ 		}
+-
++#if 0
+ 		header->v.string = g_convert((const char *) ptr, hdr_len - 5,
+ 						"UTF-8", "UTF-16BE",
+ 						NULL, &str_len, &conv_err);
+@@ -187,6 +187,16 @@ GObexHeader *g_obex_header_decode(const void *data, gsize len,
+ 			g_error_free(conv_err);
+ 			goto failed;
+ 		}
++#else
++		char *name = (char *)malloc(hdr_len - 5);
++		int i = 0;
++		for(i = 0; i < hdr_len - 5; i++)
++			name[i] = ptr[i * 2 + 1];
++#endif
++
++		header->v.string = name;
++		str_len = hdr_len - 5;
++
+ 
+ 		header->vlen = (gsize) str_len;
+ 		header->hlen = hdr_len;
+-- 
+2.17.1

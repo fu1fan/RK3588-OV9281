@@ -1,0 +1,9 @@
+#!/usr/bin/env xdg-open
+[Desktop Entry]
+Name=QtMultScreen
+GenericName=Demo App
+Icon=/usr/share/matrix-gui-2.0/apps/images/ubootmenu-icon.png
+Exec=/usr/bin/qtdemo_qtmultscreen
+Type=Application
+ProgramType=gui
+Name[en_US]=qt5_ubootmenu.desktop

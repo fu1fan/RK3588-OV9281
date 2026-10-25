@@ -1,0 +1,25 @@
+QMAKE_CXX.QT_COMPILER_STDCXX = 201402L
+QMAKE_CXX.QMAKE_GCC_MAJOR_VERSION = 6
+QMAKE_CXX.QMAKE_GCC_MINOR_VERSION = 5
+QMAKE_CXX.QMAKE_GCC_PATCH_VERSION = 0
+QMAKE_CXX.COMPILER_MACROS = \
+    QT_COMPILER_STDCXX \
+    QMAKE_GCC_MAJOR_VERSION \
+    QMAKE_GCC_MINOR_VERSION \
+    QMAKE_GCC_PATCH_VERSION
+QMAKE_CXX.INCDIRS = \
+    /work/OK3399-linux-source/buildroot/output/rockchip_rk3399/host/aarch64-buildroot-linux-gnu/include/c++/6.5.0 \
+    /work/OK3399-linux-source/buildroot/output/rockchip_rk3399/host/aarch64-buildroot-linux-gnu/include/c++/6.5.0/aarch64-buildroot-linux-gnu \
+    /work/OK3399-linux-source/buildroot/output/rockchip_rk3399/host/aarch64-buildroot-linux-gnu/include/c++/6.5.0/backward \
+    /work/OK3399-linux-source/buildroot/output/rockchip_rk3399/host/lib/gcc/aarch64-buildroot-linux-gnu/6.5.0/include \
+    /work/OK3399-linux-source/buildroot/output/rockchip_rk3399/host/lib/gcc/aarch64-buildroot-linux-gnu/6.5.0/include-fixed \
+    /work/OK3399-linux-source/buildroot/output/rockchip_rk3399/host/aarch64-buildroot-linux-gnu/include \
+    /work/OK3399-linux-source/buildroot/output/rockchip_rk3399/host/aarch64-buildroot-linux-gnu/sysroot/usr/include
+QMAKE_CXX.LIBDIRS = \
+    /work/OK3399-linux-source/buildroot/output/rockchip_rk3399/host/lib/gcc/aarch64-buildroot-linux-gnu/6.5.0 \
+    /work/OK3399-linux-source/buildroot/output/rockchip_rk3399/host/aarch64-buildroot-linux-gnu/lib64 \
+    /work/OK3399-linux-source/buildroot/output/rockchip_rk3399/host/aarch64-buildroot-linux-gnu/sysroot/lib64 \
+    /work/OK3399-linux-source/buildroot/output/rockchip_rk3399/host/aarch64-buildroot-linux-gnu/sysroot/usr/lib64 \
+    /work/OK3399-linux-source/buildroot/output/rockchip_rk3399/host/aarch64-buildroot-linux-gnu/lib \
+    /work/OK3399-linux-source/buildroot/output/rockchip_rk3399/host/aarch64-buildroot-linux-gnu/sysroot/lib \
+    /work/OK3399-linux-source/buildroot/output/rockchip_rk3399/host/aarch64-buildroot-linux-gnu/sysroot/usr/lib

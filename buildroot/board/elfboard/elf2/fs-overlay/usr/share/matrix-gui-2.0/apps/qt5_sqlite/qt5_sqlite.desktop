@@ -1,0 +1,9 @@
+#!/usr/bin/env xdg-open
+[Desktop Entry]
+Name=Sqlite
+GenericName=Demo App
+Icon=/usr/share/matrix-gui-2.0/apps/images/forlinx/books-icon.png
+Exec=qtdemo_sqlite
+Type=Application
+ProgramType=gui
+Name[en_US]=qt5_sqlite.desktop

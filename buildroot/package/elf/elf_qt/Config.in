@@ -1,0 +1,9 @@
+config BR2_PACKAGE_ELF_QT
+	bool "elf_qt_demo"
+	depends on BR2_PACKAGE_QT5
+	depends on BR2_PACKAGE_QT5SERIALBUS
+	depends on BR2_PACKAGE_QT5MULTIMEDIA
+	depends on BR2_PACKAGE_QT5WEBENGINE
+	depends on BR2_PACKAGE_QT5WAYLAND
+	help
+	  ELF elf_qt_demo application based on QT

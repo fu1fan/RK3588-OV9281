@@ -1,0 +1,6 @@
+{
+  "command": "./build.sh all (after excluding private-key material)",
+  "exit_code": 0,
+  "elapsed_seconds": 87.1,
+  "board_tested": false
+}

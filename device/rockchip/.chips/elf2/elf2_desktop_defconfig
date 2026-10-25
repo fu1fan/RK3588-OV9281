@@ -1,0 +1,11 @@
+RK_UBOOT_CFG="board_elf2_uboot"
+RK_KERNEL_CFG="elf2_kernel_defconfig"
+RK_KERNEL_DTS_NAME="elf2-kernel"
+RK_USE_FIT_IMG=y
+RK_WIFIBT_AX200=y
+
+RK_BUILDROOT=n
+RK_DEBIAN=n
+RK_YOCTO=n
+RK_UBUNTU=y
+

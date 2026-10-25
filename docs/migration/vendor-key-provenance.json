@@ -1,0 +1,23 @@
+{
+  "unchanged_factory_sample_signing_key_files": [
+    "external/security/rk_tee_user/v1/export-user_ta/keys/oem_privkey.pem",
+    "external/security/rk_tee_user/v1/tools/change_puk_tool-release/change_puk_linux/oem_privkey.pem",
+    "external/security/rk_tee_user/v1/tools/change_puk_tool-release/change_puk_window/oem_privkey.pem",
+    "external/security/rk_tee_user/v1/tools/ta_resign_tool-release/linux/oem_privkey.pem",
+    "external/security/rk_tee_user/v2/cert/ca.key",
+    "external/security/rk_tee_user/v2/cert/mid.key",
+    "external/security/rk_tee_user/v2/cert/my.key",
+    "external/security/rk_tee_user/v2/export-ta_arm32/keys/oem_privkey.pem",
+    "external/security/rk_tee_user/v2/export-ta_arm64/keys/oem_privkey.pem",
+    "external/security/rk_tee_user/v2/tools/change_puk_tool-release/change_puk_linux/oem_privkey.pem",
+    "external/security/rk_tee_user/v2/tools/change_puk_tool-release/change_puk_window/oem_privkey.pem",
+    "external/security/rk_tee_user/v2/tools/ta_resign_tool-release/linux/oem_privkey.pem",
+    "tools/linux/Linux_SecurityAVB/avb_keys/testkey_pik.pem",
+    "tools/linux/Linux_SecurityAVB/avb_keys/testkey_prk.pem",
+    "tools/linux/Linux_SecurityAVB/avb_keys/testkey_psk.pem",
+    "tools/linux/Linux_SecurityAVB/avb_keys/testkey_puk.pem"
+  ],
+  "count": 16,
+  "all_match_original_vendor_archive": true,
+  "excluded_from_public_export": true
+}

@@ -1,0 +1,10 @@
+menuconfig BR2_PACKAGE_ELF
+	bool "ELF BSP packages"
+
+if BR2_PACKAGE_ELF
+
+source "package/elf/quectelCM/Config.in"
+source "package/elf/elf_cmd/Config.in"
+source "package/elf/elf_qt/Config.in"
+
+endif

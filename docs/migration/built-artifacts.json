@@ -1,0 +1,22 @@
+[
+  {
+    "file": "kernel/arch/arm64/boot/Image",
+    "bytes": 39275008,
+    "sha256": "09a921101a93295bf13660d62d3a264e6d802910d508c78e54e618b76cadeb4b"
+  },
+  {
+    "file": "kernel/boot.img",
+    "bytes": 40621568,
+    "sha256": "52c3e45e3b328f87514aedd591dc087bb3c9111c9cd0bf06cf8778acb0ccbb24"
+  },
+  {
+    "file": "kernel/arch/arm64/boot/dts/rockchip/elf2-kernel.dtb",
+    "bytes": 278247,
+    "sha256": "c50a4b0065d0109be03a31887bfa805b1807a8e7a1ce67ed013afb8eb005622d"
+  },
+  {
+    "file": "output/update/Image/update.img",
+    "bytes": 1868618314,
+    "sha256": "7e68c32b241f56335ec2c402e053a452db1dd2e3b3ae18d768f8addc5d160ffb"
+  }
+]

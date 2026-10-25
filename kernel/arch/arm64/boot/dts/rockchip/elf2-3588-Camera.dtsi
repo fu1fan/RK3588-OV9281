@@ -1,0 +1,319 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Copyright (c) 2022 Forlinx Co., Ltd.
+ *
+
+ * rkisp0 --> rkisp0_vir0/rkisp0_vir1/rkisp0_vir2/rkisp0_vir3
+ * rkisp1 --> rkisp1_vir0/rkisp1_vir1/rkisp1_vir2/rkisp1_vir3
+
+ * rkcif_mipi_lvds --> rkcif_mipi_lvds[0-4]_sditf
+
+ * mipicamera0 --> csi2_dcphy0 --> mipi0_csi2 -->rkcif_mipi_lvds  --> rkcif_mipi_lvds_sditf  --> rkisp0_vir0
+ * mipicamera1 --> csi2_dcphy1 --> mipi1_csi2 -->rkcif_mipi_lvds1 --> rkcif_mipi_lvds1_sditf --> rkisp0_vir1
+	
+ * csi2_dphy0 or (csi2_dphy1、csi2_dphy2)	dphy0
+ * csi2_dphy3 or (csi2_dphy4、csi2_dphy5)	dphy1
+
+ * mipicamera2 --> csi2_dphy1 -->  mipi2_csi2 -->rkcif_mipi_lvds2 -->rkcif_mipi_lvds2_sditf  --> rkisp0_vir2
+ * mipicamera3 --> csi2_dphy2 -->  mipi3_csi2 -->rkcif_mipi_lvds3 -->rkcif_mipi_lvds3_sditf  --> rkisp1_vir0
+ * mipicamera4 --> csi2_dphy4 -->  mipi4_csi2 -->rkcif_mipi_lvds4 -->rkcif_mipi_lvds4_sditf  --> rkisp1_vir1
+ * mipicamera5 --> csi2_dphy5 -->  mipi5_csi2 -->rkcif_mipi_lvds5 -->rkcif_mipi_lvds5_sditf  --> rkisp1_vir2
+
+ * mipicamera6 --> rkcif_dvp ---> rkcif_dvp_sditf
+ */
+
+/ {
+    ext_cam_clk: external-camera-clock {
+        compatible = "fixed-clock";
+        clock-frequency = <24000000>;
+        clock-output-names = "CLK_CAMERA_24MHZ";
+        #clock-cells = <0>;
+    };
+};
+
+&rkcif {
+    status = "okay";
+};
+
+&rkcif_mmu {
+    status = "okay";
+};
+
+
+//************************************************
+//***  CAM1 OV13855 Configuration description  ***
+//************************************************
+
+&mipi_dcphy0 {
+    status = "okay";
+};
+
+&rkisp0 {
+    status = "okay";
+};
+
+&isp0_mmu {
+    status = "okay";
+};
+
+&i2c3 {
+    status = "okay";
+    clock-frequency = <400000>;
+
+   cam1_dw9763: cam1-dw9763@c {
+        compatible = "dongwoon,dw9763";
+        status = "okay";
+        reg = <0x0c>;
+        rockchip,vcm-max-current = <120>;
+        rockchip,vcm-start-current = <20>;
+        rockchip,vcm-rated-current = <90>;
+        rockchip,vcm-step-mode = <3>;
+        rockchip,vcm-t-src = <0x20>;
+        rockchip,vcm-t-div = <1>;
+        rockchip,camera-module-index = <0>;
+        rockchip,camera-module-facing = "back";
+    };
+
+    cam1_ov13855: cam1-ov13855@36 {
+        compatible = "ovti,ov13855";
+        status = "okay";
+        reg = <0x36>;
+
+        clocks = <&ext_cam_clk>;
+        clock-names = "xvclk";
+	pinctrl-names = "default";
+        pinctrl-0 = <&cam1_reset_gpio
+                     &cam1_pwren_gpio>;
+        pwdn-gpios = <&gpio1 RK_PD3 GPIO_ACTIVE_HIGH>;
+        reset-gpios = <&gpio1 RK_PC6 GPIO_ACTIVE_HIGH>;
+
+        rockchip,camera-module-index = <0>;
+        rockchip,camera-module-facing = "back";
+        rockchip,camera-module-name = "CMK-OT2016-FV1";
+        rockchip,camera-module-lens-name = "default";
+        lens-focus = <&cam1_dw9763>;
+        port {
+            cam1_ov13855_out: endpoint {
+            remote-endpoint = <&mipi_in_0_ucam1>;
+            data-lanes = <1 2>;
+            };
+        };
+    };
+};
+
+&csi2_dcphy0 {
+    status = "okay";
+    ports {
+        #address-cells = <1>;
+        #size-cells = <0>;
+        port@0 {
+            reg = <0>;
+            #address-cells = <1>;
+            #size-cells = <0>;
+            mipi_in_0_ucam1: endpoint@1 {
+                reg = <1>;
+                remote-endpoint = <&cam1_ov13855_out>;
+                data-lanes = <1 2>;
+            };
+        };
+        port@1 {
+            reg = <1>;
+            #address-cells = <1>;
+            #size-cells = <0>;
+            csidcphy0_out: endpoint@0 {
+                reg = <0>;
+                remote-endpoint = <&mipi0_csi2_input>;
+            };
+        };
+    };
+};
+
+&mipi0_csi2 {
+    status = "okay";
+    ports {
+        #address-cells = <1>;
+        #size-cells = <0>;
+        port@0 {
+            reg = <0>;
+            #address-cells = <1>;
+            #size-cells = <0>;
+            mipi0_csi2_input: endpoint@1 {
+                reg = <1>;
+                remote-endpoint = <&csidcphy0_out>;
+            };
+        };
+        port@1 {
+            reg = <1>;
+            #address-cells = <1>;
+            #size-cells = <0>;
+            mipi0_csi2_output: endpoint@0 {
+                reg = <0>;
+                remote-endpoint = <&cif_mipi_lvds0>;
+            };
+        };
+    };
+};
+
+&rkcif_mipi_lvds {
+    status = "okay";
+    port {
+        cif_mipi_lvds0: endpoint {
+            remote-endpoint = <&mipi0_csi2_output>;
+        };
+    };
+};
+
+&rkcif_mipi_lvds_sditf {
+    status = "okay";
+    port {
+        mipi_lvds_sditf: endpoint {
+            remote-endpoint = <&isp0_vir0>;
+        };
+    };
+};
+
+&rkisp0_vir0 {
+    status = "okay";
+    port {
+        #address-cells = <1>;
+        #size-cells = <0>;
+        isp0_vir0: endpoint@0 {
+            reg = <0>;
+            remote-endpoint = <&mipi_lvds_sditf>;
+        };
+    };
+};
+
+
+/* CAM2_OV9281_BEGIN
+ *
+ * OV9281 mono global-shutter camera on the P16 FPC ("Raspberry pi_CAM").
+ *
+ * Wiring, from the ELF2 V1.3 schematic and RK3588_PinOut_V1.1:
+ *
+ *   P16 nets MIPI_DPHY_CSI2_RX_D0/D1/CLK
+ *     -> core-board pins MIPI_CSI1_RX_D2N/D2P, D3N/D3P, CLK1N/CLK1P
+ *     -> balls AK32/AK31, AL32/AL31, AM32/AM31 = MIPI_CSI1_D2/D3/CLK1
+ *
+ * So the module lands on the *second half* (CLK1 + D2/D3) of the Innosilicon
+ * MIPI CSI1 RX PHY (csi2_dphy1_hw @ 0xfedc8000).  It is NOT on the Samsung
+ * combo DCPHY1 (@ 0xfedb0000, pins MIPI_DPHY1_RX) - the ELF2 pin table marks
+ * that whole group "不做使用".
+ *
+ * Pipeline (see the mapping comment at the top of this file):
+ *
+ *   ov9281 -> csi2_dphy5 -> mipi5_csi2 -> rkcif_mipi_lvds5
+ *
+ * Which physical PHY is used is not decided by the DT node itself: rkcif
+ * derives csi_idx from of_alias_get_id(node, "rkcif_mipi_lvds") in cif/dev.c
+ * and pushes it to the PHY driver, where csi_idx 5 selects CSIPHY1 with
+ * PHY_SPLIT_23.  Hence the *5 CIF virtual device is mandatory here.
+ *
+ * I2C is i2c5 (i2c5m2, GPIO4_A6/A7), shared with the RTC.
+ * The connector wires no reset/pwdn GPIO; the module carries its own 24MHz
+ * oscillator, so ext_cam_clk only exists to satisfy the driver clk_get().
+ *
+ * The ISP branch (rkcif_mipi_lvds5_sditf -> rkisp1_vir2) is deliberately left
+ * disabled: there is no rkaiq IQ file for OV9281 in this SDK, so only
+ * CIF-direct ("bypass") capture is usable.
+ */
+
+&csi2_dphy5 {
+	status = "okay";
+
+	ports {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		port@0 {
+			reg = <0>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			mipi_in_ucam5: endpoint@1 {
+				reg = <1>;
+				remote-endpoint = <&cam2_ov9281_out>;
+				data-lanes = <1 2>;
+			};
+		};
+
+		port@1 {
+			reg = <1>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			csidphy5_out: endpoint@0 {
+				reg = <0>;
+				remote-endpoint = <&mipi5_csi2_input>;
+			};
+		};
+	};
+};
+
+&mipi5_csi2 {
+	status = "okay";
+
+	ports {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		port@0 {
+			reg = <0>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			mipi5_csi2_input: endpoint@1 {
+				reg = <1>;
+				remote-endpoint = <&csidphy5_out>;
+			};
+		};
+
+		port@1 {
+			reg = <1>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			mipi5_csi2_output: endpoint@0 {
+				reg = <0>;
+				remote-endpoint = <&cif_mipi_in5>;
+			};
+		};
+	};
+};
+
+&rkcif_mipi_lvds5 {
+	status = "okay";
+
+	port {
+		cif_mipi_in5: endpoint {
+			remote-endpoint = <&mipi5_csi2_output>;
+		};
+	};
+};
+
+&i2c5 {
+	status = "okay";
+	clock-frequency = <400000>;
+
+	cam2_ov9281: cam2-ov9281@60 {
+		compatible = "ovti,ov9281";
+		status = "okay";
+		reg = <0x60>;
+
+		clocks = <&ext_cam_clk>;
+		clock-names = "xvclk";
+
+		rockchip,camera-module-index = <1>;
+		rockchip,camera-module-facing = "back";
+		rockchip,camera-module-name = "OV9281";
+		rockchip,camera-module-lens-name = "default";
+
+		port {
+			cam2_ov9281_out: endpoint {
+				remote-endpoint = <&mipi_in_ucam5>;
+				data-lanes = <1 2>;
+			};
+		};
+	};
+};
+/* CAM2_OV9281_END */

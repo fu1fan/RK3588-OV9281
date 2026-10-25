@@ -1,0 +1,12 @@
+--- a/src/core/web_engine_context.cpp
++++ b/src/core/web_engine_context.cpp
+@@ -796,7 +796,7 @@
+     registerMainThreadFactories();
+ 
+     content::ContentMainParams contentMainParams(m_mainDelegate.get());
+-    contentMainParams.setup_signal_handlers = false;
++//    contentMainParams.setup_signal_handlers = false;
+ #if defined(OS_WIN)
+     contentMainParams.sandbox_info = staticSandboxInterfaceInfo();
+     sandbox::SandboxInterfaceInfo sandbox_info = {0};
+

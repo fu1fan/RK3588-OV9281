@@ -1,0 +1,47 @@
+#!/bin/sh
+
+[ -f /etc/dnsmasq.conf ] || exit 0
+
+# This dnsmasq instance serves the WiFi AP subnet and is pinned to the WiFi
+# netdev (see interface=wlP4p65s0 / bind-interfaces in /etc/dnsmasq.conf).
+#
+# dnsmasq enumerates interfaces by their IP address, so a netdev that exists
+# but carries no address is invisible to it and it aborts with
+# "unknown interface wlP4p65s0".  The address only appears once AP mode is
+# brought up -- /usr/bin/cmddemo_hostapd.sh assigns 192.168.2.1 and starts
+# hostapd before invoking this service.
+#
+# At a plain boot there is no AP, so there is nothing for dnsmasq to serve.
+# Report that as skipped rather than as a failure.
+unconfigured_interfaces() {
+	for n in $(sed -n 's/^[[:space:]]*interface=//p' /etc/dnsmasq.conf 2>/dev/null); do
+		ip -4 addr show dev "$n" 2>/dev/null | grep -q "inet " || echo "$n"
+	done
+}
+
+case "$1" in
+	start)
+		printf "Starting dnsmasq: "
+		missing=$(unconfigured_interfaces)
+		if [ "$missing" ]; then
+			echo "SKIPPED (no address on${missing}; start AP mode first)"
+			exit 0
+		fi
+		start-stop-daemon -S -x /usr/sbin/dnsmasq
+		[ $? = 0 ] && echo "OK" || echo "FAIL"
+		;;
+	stop)
+		printf "Stopping dnsmasq: "
+		start-stop-daemon -K -q -x /usr/sbin/dnsmasq
+		[ $? = 0 ] && echo "OK" || echo "FAIL"
+		;;
+	restart|reload)
+		$0 stop
+		$0 start
+		;;
+	*)
+		echo "Usage: $0 {start|stop|restart}"
+		exit 1
+esac
+
+exit 0

@@ -1,0 +1,8 @@
+#!/usr/bin/env xdg-open
+[Desktop Entry]
+Name=Set Frequency A55
+Icon=/usr/share/matrix-gui-2.0/apps/images/power-icon.png
+Exec=/html-apps/power-set-frequency-a53/set-frequency.php
+Type=Application
+Categories=power
+ProgramType=web

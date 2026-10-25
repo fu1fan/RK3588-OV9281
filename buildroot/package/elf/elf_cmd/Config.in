@@ -1,0 +1,4 @@
+config BR2_PACKAGE_ELF_CMD
+	bool "elf_cmd_demo"
+	help
+	  ELF elf_cmd_demo application based
