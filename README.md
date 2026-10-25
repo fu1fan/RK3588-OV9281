@@ -18,7 +18,14 @@
 
 ## 获取必要依赖
 
-源码在 Git；固定工具链、基础 rootfs 和厂商二进制材料位于本仓库 `sdk-dependencies-20261025` 版本附件。
+源码在 Git；固定工具链、基础 rootfs 和厂商二进制材料作为附件永久绑定到源码提交 `96caef6c77291994036142350d7895abe2a2260b`。当前 CLI 没有创建 Release 的授权，因此使用提交附件，后续文档提交不会改变这份依赖的绑定。
+
+| 附件 | 压缩大小 |
+|---|---:|
+| [elf2-aarch64-toolchain-20261025.tar.xz](https://cnb.cool/fu1fan/RK3588-OV9281/-/commit-assets/download/96caef6c77291994036142350d7895abe2a2260b/elf2-aarch64-toolchain-20261025.tar.xz) | 177.33 MB |
+| [elf2-base-rootfs-sanitized-20261025.tar.xz](https://cnb.cool/fu1fan/RK3588-OV9281/-/commit-assets/download/96caef6c77291994036142350d7895abe2a2260b/elf2-base-rootfs-sanitized-20261025.tar.xz) | 454.4 MB |
+| [elf2-vendor-build-assets-20261025.tar.xz](https://cnb.cool/fu1fan/RK3588-OV9281/-/commit-assets/download/96caef6c77291994036142350d7895abe2a2260b/elf2-vendor-build-assets-20261025.tar.xz) | 2109.39 MB |
+| [SHA256SUMS](https://cnb.cool/fu1fan/RK3588-OV9281/-/commit-assets/download/96caef6c77291994036142350d7895abe2a2260b/SHA256SUMS) | 校验清单 |
 
 下载附件后，在仓库根目录执行：
 

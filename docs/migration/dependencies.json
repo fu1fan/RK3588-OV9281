@@ -7,7 +7,8 @@
       "sha256": "436ac00b03f014d279458ae9d234f91fa646f62fbaee538b57c687063fba5be1",
       "files": 5939,
       "restore_root": ".",
-      "compression": "xz"
+      "compression": "xz",
+      "download_url": "https://cnb.cool/fu1fan/RK3588-OV9281/-/commit-assets/download/96caef6c77291994036142350d7895abe2a2260b/elf2-aarch64-toolchain-20261025.tar.xz"
     },
     {
       "file": "elf2-base-rootfs-sanitized-20261025.tar.xz",
@@ -15,7 +16,8 @@
       "sha256": "34251f4ee68036a961e31333656fdaa01a94519cd51b77c917a702935d73c970",
       "files": 2,
       "restore_root": ".",
-      "compression": "xz"
+      "compression": "xz",
+      "download_url": "https://cnb.cool/fu1fan/RK3588-OV9281/-/commit-assets/download/96caef6c77291994036142350d7895abe2a2260b/elf2-base-rootfs-sanitized-20261025.tar.xz"
     },
     {
       "file": "elf2-vendor-build-assets-20261025.tar.xz",
@@ -23,8 +25,15 @@
       "sha256": "88b4c9fc9892b41594fa0400a42cb6330db9fbcd6f0fbddb96ceba1262e842b1",
       "files": 1305,
       "restore_root": ".",
-      "compression": "xz"
+      "compression": "xz",
+      "download_url": "https://cnb.cool/fu1fan/RK3588-OV9281/-/commit-assets/download/96caef6c77291994036142350d7895abe2a2260b/elf2-vendor-build-assets-20261025.tar.xz"
     }
   ],
-  "note": "Extract every archive at the repository root. These are fixed dependencies, not build caches."
+  "note": "Extract every archive at the repository root. These are fixed dependencies, not build caches.",
+  "asset_binding": {
+    "type": "commit",
+    "repository": "fu1fan/RK3588-OV9281",
+    "sha": "96caef6c77291994036142350d7895abe2a2260b",
+    "retention_days": 0
+  }
 }
