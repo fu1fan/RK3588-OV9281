@@ -17,6 +17,24 @@ def git(root, *args):
 
 
 class IncrementalSourceTests(unittest.TestCase):
+    def test_cache_key_keeps_driver_edits_incremental_but_invalidates_board_config(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)
+            git(root,'init','-q');git(root,'config','user.name','CI test');git(root,'config','user.email','ci@localhost')
+            files={'.ci/Dockerfile':'environment', '.ci/build.py':'builder', 'dependencies.json':'{}',
+                   'kernel/Makefile':'VERSION=5', 'kernel/drivers/example.c':'first',
+                   'device/rockchip/.chips/elf2/elf2_sdkbuild_defconfig':'RK_BUILDROOT=y'}
+            for name,text in files.items():
+                p=root/name;p.parent.mkdir(parents=True,exist_ok=True);p.write_text(text)
+            git(root,'add','.');git(root,'commit','-qm','baseline')
+            first=build.compatibility_key(root,root/'dependencies.json')
+            (root/'kernel/drivers/example.c').write_text('second')
+            git(root,'add','.');git(root,'commit','-qm','driver edit')
+            self.assertEqual(build.compatibility_key(root,root/'dependencies.json'),first)
+            (root/'device/rockchip/.chips/elf2/elf2_sdkbuild_defconfig').write_text('RK_BUILDROOT=n')
+            git(root,'add','.');git(root,'commit','-qm','board config edit')
+            self.assertNotEqual(build.compatibility_key(root,root/'dependencies.json'),first)
+
     def test_tag_switch_preserves_unchanged_source_and_objects_and_removes_deleted_source(self):
         with tempfile.TemporaryDirectory() as directory:
             root=Path(directory); source=root/'source'; source.mkdir(); work=root/'work'

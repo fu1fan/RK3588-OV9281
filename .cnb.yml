@@ -4,7 +4,9 @@
       name: elf2-system
       runner:
         tags: cnb:arch:amd64
-        cpus: 16
+        cpus: 32
+      env:
+        ELF2_JOBS: "32"
       lock:
         key: elf2-system-cache-v1
         wait: true
@@ -31,6 +33,9 @@
         - name: Build and verify system image
           script: python3 .ci/build.py
           timeout: 60m
+        - name: Verify incremental reuse when requested
+          script: python3 .ci/reuse.py
+          timeout: 60m
         - name: Publish verified artifacts
           script: python3 .ci/publish.py
           timeout: 30m
@@ -47,4 +52,9 @@
       name: elf2-system-clean
       env:
         ELF2_BUILD_MODE: clean
+  web_trigger_cache_probe:
+    - <<: *system_build
+      name: elf2-system-cache-probe
+      env:
+        ELF2_VERIFY_REUSE: "1"
 

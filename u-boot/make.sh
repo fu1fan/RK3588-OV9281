@@ -7,6 +7,7 @@
 
 set -e
 JOB=`sed -n "N;/processor/p" /proc/cpuinfo|wc -l`
+JOB=${RK_CI_JOBS:-$JOB}
 SUPPORT_LIST=`ls configs/*[r,p][x,v,k][0-9][0-9]*_defconfig`
 CMD_ARGS=$1
 

@@ -13,7 +13,7 @@ git push origin system-v0.1.0-rc.1
 
 ## 构建过程
 
-CNB 分配 amd64 / 16 核 / 32 GiB 容器。`.ci/Dockerfile` 构建 Ubuntu 22.04 主机环境，包含 Python 2/3 和 ccache；CNB 按 Dockerfile、依赖获取脚本和依赖清单缓存环境镜像。三份 SHA256 固定依赖在环境镜像内展开，避免每次重新下载。
+CNB 分配 amd64 / 32 核 / 64 GiB 容器。`.ci/Dockerfile` 构建 Ubuntu 22.04 主机环境，包含 Python 2/3 和 ccache；CNB 按 Dockerfile、依赖获取脚本和依赖清单缓存环境镜像。三份 SHA256 固定依赖在环境镜像内展开，避免每次重新下载。
 
 CI 先将当前 Tag 的精确源码同步到独立缓存工作区，再运行厂商 `build.sh`。内核、U-Boot 对象文件原地缓存；增加的 `RK_CI_AARCH64_TOOLCHAIN` 仅在 CI 显式设置时生效，普通手动构建仍使用原工具链发现逻辑。
 
@@ -54,3 +54,7 @@ python3 .ci/build.py --finish
 ```
 
 `.ci/publish.py` 只在具备 CNB 流水线环境时发布；本地构建不会主动上传。改变源码后应先提交，因为构建针对 Git HEAD 的准确内容。
+
+## 复用验证
+
+为 Tag 注释加入 `[verify-reuse]`，或手动触发 `web_trigger_cache_probe`，同一节点和工作区将先构建一次，再立即构建第二次，并发布 `reuse-validation.json`。它记录两次耗时、对象复用数量和 ccache 统计；普通 Tag 仍只构建一次。编译并行数明确限制为 32，不依赖宿主机 `/proc/cpuinfo` 暴露的核数。

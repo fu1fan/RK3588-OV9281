@@ -51,7 +51,8 @@ def compatibility_key(source, manifest):
     listing = command(['git', 'ls-tree', '-r', 'HEAD', 'kernel', 'u-boot/configs', 'device/rockchip/.chips/elf2'], cwd=source, capture=True)
     for line in listing.splitlines():
         path = line.split('\t', 1)[-1]
-        if '/configs/' in path or Path(path).name.startswith('Kconfig') or path in ('kernel/Makefile',):
+        if ('/configs/' in path or Path(path).name.startswith('Kconfig') or
+                path.startswith('device/rockchip/.chips/elf2/') or path == 'kernel/Makefile'):
             h.update(line.encode())
     return h.hexdigest()[:24]
 
@@ -158,7 +159,8 @@ def build():
     LOG = (DIST/(prefix+'-build.log')).open('wb')
     info = {'tag': tag, 'commit': revision, 'mode': mode, 'cache_key': key,
             'cache_hit': bool(previous), 'previous_success': previous.get('commit') if previous else None,
-            'dependencies_sha256': digest(manifest), 'hardware_tested': False, 'status': 'building'}
+            'dependencies_sha256': digest(manifest), 'hardware_tested': False, 'status': 'building',
+            'parallel_jobs': int(os.environ.get('ELF2_JOBS','32'))}
     info_path = DIST/(prefix+'-build-info.json')
     STATE.write_text(json.dumps({'work': str(work), 'key': key, 'commit': revision, 'tag': tag}, indent=2))
     try:
@@ -182,6 +184,7 @@ def build():
         env = {'PATH': '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
                'HOME': os.environ.get('HOME', '/root'), 'USER': 'elf2-ci', 'LANG': 'C.UTF-8', 'LC_ALL': 'C.UTF-8',
                'TZ': 'Asia/Shanghai', 'RK_CI_AARCH64_TOOLCHAIN': toolchain,
+               'RK_CI_JOBS': str(info['parallel_jobs']),
                'CCACHE_DIR': os.environ.get('ELF2_CCACHE_DIR', '/cache/elf2-ccache'),
                'CCACHE_BASEDIR': str(work), 'CCACHE_COMPILERCHECK': 'content', 'CCACHE_NOHASHDIR': '1',
                'KBUILD_BUILD_USER': 'elf2-ci', 'KBUILD_BUILD_HOST': 'cnb',
