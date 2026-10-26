@@ -5527,7 +5527,7 @@ int rkcif_init_rx_buf(struct rkcif_stream *stream, int buf_num)
 	}
 }
 
-static int rkcif_create_dummy_buf(struct rkcif_stream *stream)
+static int rkcif_create_dummy_buf(struct rkcif_stream *stream, bool reuse)
 {
 	struct rkcif_device *dev = stream->cifdev;
 	struct rkcif_hw *hw = dev->hw_dev;
@@ -5539,6 +5539,14 @@ static int rkcif_create_dummy_buf(struct rkcif_stream *stream)
 	u32 size = 0;
 	int ret = 0;
 	int i, j;
+
+	/*
+	 * The dummy buffer is shared by every CIF device on this hardware.
+	 * reuse keeps the previous allocation across stream-to-stream
+	 * transitions instead of repurposing (and later freeing) it.
+	 */
+	if (!reuse && dummy_buf->vaddr)
+		return 0;
 
 	for (i = 0; i < hw->dev_num; i++) {
 		tmp_dev = hw->cif_dev[i];
@@ -5588,6 +5596,18 @@ static int rkcif_create_dummy_buf(struct rkcif_stream *stream)
 		}
 	}
 
+	if (!max_size) {
+		/*
+		 * Nothing in the pipeline reported a usable frame interval or
+		 * format. Allocating a zero sized dummy buffer used to reach
+		 * vb2 as a 0-byte request and fail with -ENOMEM, which then
+		 * aborted the whole start_stream() call.
+		 */
+		v4l2_err(&dev->v4l2_dev,
+			 "No usable sensor frame size for dummy buffer, size 0\n");
+		return -EINVAL;
+	}
+
 	dummy_buf->size = max_size;
 
 	dummy_buf->is_need_vaddr = true;
@@ -5595,8 +5615,10 @@ static int rkcif_create_dummy_buf(struct rkcif_stream *stream)
 	ret = rkcif_alloc_buffer(dev, dummy_buf);
 	if (ret) {
 		v4l2_err(&dev->v4l2_dev,
-			 "Failed to allocate the memory for dummy buffer, size %d\n", max_size);
-		return -ENOMEM;
+			 "Failed to allocate the memory for dummy buffer, size 0x%08x ret %d\n",
+			 max_size, ret);
+		dummy_buf->size = 0;
+		return ret;
 	}
 
 	v4l2_info(&dev->v4l2_dev, "Allocate dummy buffer, size: 0x%08x\n",
@@ -7232,7 +7254,7 @@ int rkcif_do_start_stream(struct rkcif_stream *stream, enum rkcif_stream_mode mo
 	     dev->is_use_dummybuf) &&
 	    (!dev->hw_dev->dummy_buf.vaddr) &&
 	    mode == RKCIF_STREAM_MODE_CAPTURE) {
-		ret = rkcif_create_dummy_buf(stream);
+		ret = rkcif_create_dummy_buf(stream, false);
 		if (ret < 0) {
 			mutex_unlock(&hw_dev->dev_lock);
 			v4l2_err(v4l2_dev, "Failed to create dummy_buf, %d\n", ret);

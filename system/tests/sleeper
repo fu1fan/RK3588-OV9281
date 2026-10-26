@@ -1,0 +1,4 @@
+#!/bin/bash
+# Detached stand-in for a long running daemon. argv[0] carries the name the
+# service checks for; the process only has to stay alive.
+exec -a "$1" /bin/sleep 600

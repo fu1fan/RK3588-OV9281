@@ -19,7 +19,15 @@ CI 先将当前 Tag 的精确源码同步到独立缓存工作区，再运行厂
 
 每次从未修改的基础 rootfs 开始。第一次 `all` 负责构建各组件，随后将本次内核的剥符号模块、depmod 索引和构建身份写入 rootfs，再重新打包 `update.img`。不依赖 loop 挂载。最后解开最终镜像，逐字节哈希比较 boot / recovery / rootfs / Loader，检查模块版本和必需内核配置。
 
-rootfs 用户空间仍来自固定预编译基线；没有声称从源码重建全部 Buildroot。板上看门狗、Wi-Fi STA、dummy buffer 和相机应用修复不在本轮范围内。
+rootfs 用户空间仍来自固定预编译基线；没有声称从源码重建全部 Buildroot。
+
+唯一从源码进入 rootfs 的用户空间程序是看门狗喂狗器 `system/elf2-wdctl/`，由 CI 用固定的
+AArch64 工具链交叉编译；`system/init.d/` 下的两个启动脚本和 `system/wifistation.conf.example`
+一并写入。写入后会通过 debugfs 复核存在性、权限和 ELF 架构，随后才重新打包 `update.img`。
+`.ci/tests`、`system/tests` 和 `system/elf2-wdctl/tests` 三个测试目录在构建前运行。
+
+看门狗、Wi-Fi STA 和 CIF dummy buffer 的修复已在源码中实现；相机应用（Web 预览、用户态 AE）
+仍不在范围内，也没有在开发板上验收。
 
 ## 增量缓存
 

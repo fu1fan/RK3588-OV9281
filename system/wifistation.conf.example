@@ -1,0 +1,26 @@
+# /etc/wifistation.conf - Wi-Fi station (STA) mode, disabled by default.
+#
+# Copy to /etc/wifistation.conf and fill in SSID and PSK to have
+# /etc/init.d/S36wifistation join that network at boot. Without this file the
+# service logs "STA mode disabled" and exits immediately; no credentials of
+# any kind are shipped in the image.
+#
+# Values are plain text after the first '=' - no shell quoting, no escapes.
+# A passphrase is a literal string, so it must not end in a space.
+#
+# Which interface to use. Leave empty to take the first wireless interface
+# the kernel registers. Set it explicitly to pin the STA role to one radio
+# when the board also runs in access point mode.
+IFACE=
+# SSID of the network to join.
+SSID=
+# WPA passphrase (8-63 characters) for KEY_MGMT=WPA-PSK, or empty for open.
+PSK=
+# One of WPA-PSK (WPA2/WPA3 personal) or NONE (open network).
+KEY_MGMT=WPA-PSK
+# nl80211 is the only driver interface the AX200/iwiwifi stack supports here.
+DRIVER=nl80211
+# How long to wait for association and for DHCP. Both are bounded; a
+# failure is reported but never blocks the network stack.
+ASSOC_TIMEOUT=20
+DHCP_TIMEOUT=20

@@ -11,11 +11,18 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import build
 import publish
+import rootfs_services
 from image import Ext4, install
 
 
+GIT_ENV = {'GIT_AUTHOR_NAME': 'CI test', 'GIT_AUTHOR_EMAIL': 'ci@localhost',
+           'GIT_COMMITTER_NAME': 'CI test', 'GIT_COMMITTER_EMAIL': 'ci@localhost',
+           'GIT_CONFIG_GLOBAL': '/dev/null', 'GIT_CONFIG_SYSTEM': '/dev/null'}
+
+
 def git(root, *args):
-    return subprocess.check_output(['git', *args], cwd=root, stderr=subprocess.DEVNULL, text=True).strip()
+    return subprocess.check_output(['git', *args], cwd=root, text=True,
+                                   env={**os.environ, **GIT_ENV}).strip()
 
 
 class IncrementalSourceTests(unittest.TestCase):
@@ -80,6 +87,92 @@ class RootfsTests(unittest.TestCase):
             metadata=fs.run('stat /etc/init.d/S01test')
             self.assertRegex(metadata,r'Mode:\s+0755')
             self.assertRegex(metadata,r'User:\s+0\s+Group:\s+0')
+
+
+class RootfsServiceTests(unittest.TestCase):
+    """The three system fixes have to reach the final rootfs, not just the tree."""
+
+    def test_watchdog_feeder_is_scheduled_before_wifi_and_network_bringup(self):
+        self.assertLess(rootfs_services.WATCHDOG_ORDER, rootfs_services.WIFI_ORDER)
+        names = sorted(['S01cgroup', 'S80dnsmasq', 'S98Bluez_init',
+                        rootfs_services.WATCHDOG_SCRIPT.rsplit('/', 1)[1],
+                        rootfs_services.WIFI_SCRIPT.rsplit('/', 1)[1]])
+        self.assertEqual(names[0], 'S01cgroup')
+        self.assertLess(names.index('S01watchdog'), names.index('S36wifistation'))
+        self.assertLess(names.index('S36wifistation'), names.index('S80dnsmasq'))
+
+    def test_shipped_sta_template_has_no_credentials(self):
+        rootfs_services.check_no_credentials(rootfs_services.SYSTEM/'wifistation.conf.example')
+
+    def test_a_filled_in_template_is_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            template = Path(directory)/'wifistation.conf.example'
+            template.write_text('SSID=home\nPSK=secret123\n')
+            with self.assertRaises(RuntimeError):
+                rootfs_services.check_no_credentials(template)
+
+    def test_wifi_script_does_not_carry_camera_workarounds(self):
+        rootfs_services.check_decoupled(rootfs_services.SYSTEM/'init.d'/'S36wifistation')
+        with tempfile.TemporaryDirectory() as directory:
+            bad = Path(directory)/'S36wifistation'
+            bad.write_text('#!/bin/sh\necho 0 > /sys/devices/x/is_use_dummybuf\n')
+            with self.assertRaises(RuntimeError):
+                rootfs_services.check_decoupled(bad)
+
+    def test_init_scripts_are_valid_posix_shell(self):
+        rootfs_services.check_script(rootfs_services.SYSTEM/'init.d'/'S01watchdog')
+        rootfs_services.check_script(rootfs_services.SYSTEM/'init.d'/'S36wifistation')
+
+    def test_non_aarch64_binaries_are_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            fake = Path(directory)/'elf'
+            # e_ident[16] + e_type[2] + e_machine[2]
+            header = b'\x7fELF\x02\x01\x01' + b'\x00' * 9 + b'\x02\x00'
+            fake.write_bytes(header + b'\xb7\x00')
+            rootfs_services.check_elf_aarch64(fake)
+            fake.write_bytes(header + b'\x3e\x00')
+            with self.assertRaises(RuntimeError):
+                rootfs_services.check_elf_aarch64(fake)
+
+    @unittest.skipUnless(shutil.which('debugfs') and shutil.which('mke2fs'),
+                         'e2fsprogs required')
+    def test_services_land_in_the_image_with_expected_modes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            tree = root/'tree'
+            (tree/'etc/init.d').mkdir(parents=True)
+            (tree/'lib').mkdir()
+            (tree/'dev').mkdir()
+            (tree/'var/run').mkdir(parents=True)
+            image = root/'rootfs.ext4'
+            with image.open('wb') as handle:
+                handle.truncate(16*1024*1024)
+            subprocess.run(['mke2fs','-q','-F','-t','ext4','-d',str(tree),str(image)],check=True)
+            binary = root/'elf2-wdctl'
+            binary.write_bytes(b'not really an elf, image content only')
+            modules = root/'modules'
+            modules.mkdir()
+            overlay = [(binary, rootfs_services.WATCHDOG_BINARY, 0o755),
+                       (rootfs_services.SYSTEM/'init.d'/'S01watchdog', rootfs_services.WATCHDOG_SCRIPT, 0o755),
+                       (rootfs_services.SYSTEM/'init.d'/'S36wifistation', rootfs_services.WIFI_SCRIPT, 0o755),
+                       (rootfs_services.SYSTEM/'wifistation.conf.example', rootfs_services.WIFI_TEMPLATE, 0o644)]
+            fs = install(image, modules, overlay, root/'edits')
+            rootfs_services.verify(fs)
+            self.assertRegex(fs.run('stat '+rootfs_services.WIFI_TEMPLATE), r'Mode:\s+(?:0?100644|0644)')
+            self.assertIn('elf2-wdctl', fs.run('cat '+rootfs_services.WATCHDOG_SCRIPT))
+
+    def test_kernel_requirements_cover_watchdog_and_sta_driver(self):
+        script = (Path(__file__).resolve().parents[1]/'build.py').read_text()
+        for symbol in ('CONFIG_WATCHDOG=y', 'CONFIG_DW_WATCHDOG=y', 'CONFIG_IWLWIFI=m',
+                       'CONFIG_VIDEO_OV9281=y'):
+            self.assertIn(repr(symbol), script)
+
+    def test_dummy_buffer_guard_exists_in_cif_source(self):
+        source = (build.SOURCE/
+                  'kernel/drivers/media/platform/rockchip/cif/capture.c').read_text()
+        self.assertIn('rkcif_create_dummy_buf(struct rkcif_stream *stream, bool reuse)', source)
+        self.assertIn('No usable sensor frame size for dummy buffer', source)
+        self.assertNotIn('dummy_buf->size = 0;\n\tdummy_buf->is_need_vaddr = true;', source)
 
 
 if __name__=='__main__':unittest.main()
