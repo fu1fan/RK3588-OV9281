@@ -28,8 +28,11 @@
           - elf2-system-v1:/cache/elf2-ccache:copy-on-write
       stages:
         - name: Check cache and rootfs assembly behavior
-          script: python3 -m unittest discover -s .ci/tests -v
-          timeout: 5m
+          script: |
+            python3 -m unittest discover -s .ci/tests -v
+            python3 -m unittest discover -s system/tests -v
+            python3 -m unittest discover -s system/elf2-wdctl/tests -v
+          timeout: 10m
         - name: Build and verify system image
           script: python3 .ci/build.py
           timeout: 60m

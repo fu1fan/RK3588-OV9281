@@ -1,0 +1,235 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * elf2-wdctl - keep the RK3588 DW watchdog fed from early boot.
+ *
+ * The bootloader arms the hardware watchdog, so userspace has to open
+ * /dev/watchdog and kick it before the first TOP expires.  Once the device is
+ * open it must never be left un-kicked: closing the descriptor or exiting
+ * either disarms the counter or causes an immediate reset, depending on the
+ * nowayout setting of the driver.  The daemon therefore opens the device
+ * exactly once, keeps that descriptor for its whole life, and feeds it from a
+ * dedicated thread so no other work can delay a kick past the deadline.
+ */
+#define _GNU_SOURCE
+#include <errno.h>
+#include <fcntl.h>
+#include <linux/watchdog.h>
+#include <pthread.h>
+#include <signal.h>
+#include <stdarg.h>
+#include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/ioctl.h>
+#include <time.h>
+#include <unistd.h>
+
+#define DEFAULT_DEVICE "/dev/watchdog"
+#define DEFAULT_TIMEOUT 30u
+#define DEFAULT_INTERVAL 10u
+
+static volatile sig_atomic_t stop_requested;
+static volatile sig_atomic_t hang_requested;
+static int watchdog_fd = -1;
+static const char *device_path = DEFAULT_DEVICE;
+
+static void log_msg(const char *fmt, ...)
+{
+	va_list ap;
+
+	va_start(ap, fmt);
+	fputs("elf2-wdctl: ", stderr);
+	vfprintf(stderr, fmt, ap);
+	fputc('\n', stderr);
+	va_end(ap);
+}
+
+static void on_signal(int sig)
+{
+	if (sig == SIGUSR1)
+		hang_requested = 1;
+	else
+		stop_requested = 1;
+}
+
+/* Deadlines only use CLOCK_MONOTONIC: a realtime clock step must not be able
+ * to stretch a kick interval past the hardware timeout.
+ */
+static void deadline_in(struct timespec *ts, unsigned interval_sec)
+{
+	clock_gettime(CLOCK_MONOTONIC, ts);
+	ts->tv_sec += (time_t)interval_sec;
+}
+
+static bool reached(const struct timespec *deadline)
+{
+	struct timespec now;
+
+	clock_gettime(CLOCK_MONOTONIC, &now);
+	return now.tv_sec > deadline->tv_sec ||
+	       (now.tv_sec == deadline->tv_sec && now.tv_nsec >= deadline->tv_nsec);
+}
+
+static void *feeder(void *arg)
+{
+	struct timespec next;
+	unsigned interval = *(const unsigned *)arg;
+
+	while (!stop_requested && !hang_requested) {
+		deadline_in(&next, interval);
+		if (ioctl(watchdog_fd, WDIOC_KEEPALIVE, 0) < 0)
+			log_msg("WDIOC_KEEPALIVE on %s: %s", device_path,
+				strerror(errno));
+		while (!stop_requested && !hang_requested && !reached(&next)) {
+			struct timespec slice;
+
+			deadline_in(&slice, 0);
+			slice.tv_nsec += 200L * 1000L * 1000L;
+			if (slice.tv_nsec >= 1000000000L) {
+				slice.tv_nsec -= 1000000000L;
+				slice.tv_sec += 1;
+			}
+			/* Absolute sleep; shortened by any delivered signal. */
+			clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &slice, NULL);
+		}
+	}
+	return NULL;
+}
+
+static int open_watchdog(unsigned timeout)
+{
+	int fd, seconds = (int)timeout;
+
+	fd = open(device_path, O_WRONLY | O_CLOEXEC);
+	if (fd < 0)
+		return -1;
+	if (timeout && ioctl(fd, WDIOC_SETTIMEOUT, &seconds) < 0)
+		log_msg("WDIOC_SETTIMEOUT %u: %s (driver default kept)", timeout,
+			strerror(errno));
+	return fd;
+}
+
+static void usage(void)
+{
+	fputs("Usage: elf2-wdctl [-f] [-d DEVICE] [-t SECONDS] [-i SECONDS]\n"
+	      "  -f  stay in the foreground and log every kick\n"
+	      "  -d  watchdog device node (default " DEFAULT_DEVICE ")\n"
+	      "  -t  hardware timeout in seconds (default 30)\n"
+	      "  -i  kick interval in seconds (default 10, must be < timeout)\n",
+	      stderr);
+}
+
+int main(int argc, char **argv)
+{
+	struct sigaction sa;
+	pthread_t thread;
+	unsigned timeout = DEFAULT_TIMEOUT, interval = DEFAULT_INTERVAL;
+	bool foreground = false;
+	pid_t child;
+
+	while (argc > 1) {
+		switch (argv[1][1]) {
+		case 'f':
+			foreground = true;
+			break;
+		case 'd':
+			if (!argv[2])
+				goto bad;
+			device_path = argv[2];
+			argv++;
+			argc--;
+			break;
+		case 't':
+			if (!argv[2])
+				goto bad;
+			timeout = (unsigned)strtoul(argv[2], NULL, 10);
+			argv++;
+			argc--;
+			break;
+		case 'i':
+			if (!argv[2])
+				goto bad;
+			interval = (unsigned)strtoul(argv[2], NULL, 10);
+			argv++;
+			argc--;
+			break;
+		default:
+			goto bad;
+		}
+		argv++;
+		argc--;
+	}
+	if (!interval || (timeout && interval >= timeout))
+		goto bad;
+
+	watchdog_fd = open_watchdog(timeout);
+	if (watchdog_fd < 0) {
+		log_msg("cannot open %s: %s", device_path, strerror(errno));
+		return 1;
+	}
+
+	memset(&sa, 0, sizeof(sa));
+	sa.sa_handler = on_signal;
+	sigemptyset(&sa.sa_mask);
+	sigaction(SIGTERM, &sa, NULL);
+	sigaction(SIGINT, &sa, NULL);
+	sigaction(SIGHUP, &sa, NULL);
+	sigaction(SIGUSR1, &sa, NULL);
+	signal(SIGPIPE, SIG_IGN);
+
+	/* Fork only after the device is open; the descriptor belongs to the
+	 * parent, so the parent keeps everything and the child simply exits.
+	 */
+	if (!foreground) {
+		child = fork();
+		if (child < 0) {
+			log_msg("fork: %s", strerror(errno));
+			return 1;
+		}
+		if (child > 0)
+			return 0;
+		if (setsid() < 0)
+			log_msg("setsid: %s", strerror(errno));
+	}
+
+	if (pthread_create(&thread, NULL, feeder, &interval) != 0) {
+		log_msg("cannot start kick thread");
+		return 1;
+	}
+
+	/* No SA_RESTART: the absolute sleep below must return on a signal so
+	 * that stop_requested is observed without waiting a full second.
+	 */
+	while (!stop_requested && !hang_requested) {
+		struct timespec pause;
+
+		clock_gettime(CLOCK_MONOTONIC, &pause);
+		pause.tv_sec += 1;
+		clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &pause, NULL);
+	}
+	if (hang_requested) {
+		struct timespec forever = { 0x7fffffff, 0 };
+
+		/* Diagnostics only: stop feeding the device and sit still so the
+		 * armed counter can be observed resetting the board.
+		 */
+		log_msg("SIGUSR1 received, stopping kicks on purpose");
+		for (;;)
+			clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &forever, NULL);
+	}
+
+	log_msg("stopping");
+	/* Best effort: with nowayout the driver ignores this, which is fine -
+	 * the counter then resets the board once the TOP expires.
+	 */
+	if (ioctl(watchdog_fd, WDIOC_SETOPTIONS, (int[]){ WDIOS_DISABLECARD }) < 0)
+		log_msg("WDIOC_SETOPTIONS: %s (device stays armed)", strerror(errno));
+	close(watchdog_fd);
+	watchdog_fd = -1;
+	return 0;
+
+bad:
+	usage();
+	return 2;
+}

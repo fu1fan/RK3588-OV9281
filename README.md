@@ -16,6 +16,21 @@
 
 系统 rootfs 目前沿用固定的预编译基线，不是已经验证可从零重建全部用户空间的软件发行版。Buildroot 源码、原有配置和本地软件包材料同时保留，供后续开发。
 
+## 系统修复
+
+| 问题 | 源码位置 | 镜像内落点 |
+|---|---|---|
+| 开机 40–90 秒看门狗复位 | `kernel/drivers/watchdog/dw_wdt.c`、`system/elf2-wdctl/` | `/usr/bin/elf2-wdctl`、`/etc/init.d/S01watchdog` |
+| AX200 STA 不自动联网 | `system/init.d/S36wifistation`、`system/wifistation.conf.example` | `/etc/init.d/S36wifistation`、`/etc/wifistation.conf.example` |
+| `/dev/video11` 启流 ENOMEM / 零尺寸 dummy buffer | `kernel/drivers/media/platform/rockchip/cif/capture.c`、`kernel/drivers/media/i2c/ov9281.c` | 内核镜像 |
+
+看门狗喂狗程序在 CI 中用固定的 AArch64 工具链交叉编译，写入 rootfs 后会校验 ELF 架构、权限和
+`/proc` 可见的 pid 一致性。Wi-Fi STA 默认不启用：镜像里只有不含 SSID/密码的
+`/etc/wifistation.conf.example`，复制为 `/etc/wifistation.conf` 并填写后才在开机时联网。
+
+这些改动只在云端编译和镜像内容层面验证，尚未在开发板上做过复位稳定性、无线关联/DHCP 和
+相机启流验收。
+
 ## 获取必要依赖
 
 源码在 Git；固定工具链、基础 rootfs 和厂商二进制材料作为附件永久绑定到源码提交 `96caef6c77291994036142350d7895abe2a2260b`。当前 CLI 没有创建 Release 的授权，因此使用提交附件，后续文档提交不会改变这份依赖的绑定。
@@ -66,6 +81,6 @@ export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 - 排除 Ubuntu/Debian/Yocto/RTOS/UEFI 路线、NPU 模型转换工具，以及未纳入当前构建的示例；当前 NPU 配置仍会构建 `rknn_common_test`，其代码和第三方依赖保留。
 - rootfs 和相同的 Wi-Fi 配置模板已清除预置联网信息；镜像内旧 SSH 主机密钥及公钥已移除，原有 `S50sshd` 会在启动时重新生成。原 SDK 未被修改。
 - 原厂示例签名私钥均已排除；含完整测试私钥的两份可选 TEE 静态库，以及 rootfs 中带私钥的 Qt SSL 示例也不公开分发。安全启动、TA 重签等非本次基础构建功能需要自行准备密钥和相应依赖。原许可证文件均保留，各组件分别遵循原许可证。
-- 没有把开发板上的看门狗喂狗、Wi-Fi STA 自启、CIF dummy buffer 绕过措施和相机 Web 服务合入本次基础系统。
+- 看门狗喂狗、Wi-Fi STA 服务和 CIF dummy buffer 修复已在本仓库源码中实现，由 CI 写入最终 rootfs；相机 Web 服务等应用层未导入。
 
 构建结果和未验证范围见 `docs/migration/VALIDATION.md`；板上尚未回写镜像的项目见 `docs/migration/BOARD_ONLY_CHANGES.md`。

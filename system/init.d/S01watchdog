@@ -1,0 +1,99 @@
+#!/bin/sh
+#
+# Start the watchdog feeder before anything that can block.
+#
+# The DW watchdog on this board is armed by the bootloader, so the first TOP
+# expires 40-90 s after power-on if nobody kicks it. This script runs from
+# rcS, whose order is the lexical order of /etc/init.d/S??* names, so the
+# S01 prefix puts it ahead of the network, Wi-Fi, Bluetooth and Qt services.
+# Nothing here blocks on another subsystem: the daemon is started, the pid
+# file written, and the script returns immediately.
+#
+# elf2-wdctl keeps the /dev/watchdog descriptor open for its whole life and
+# feeds it from a dedicated thread. With CONFIG_WATCHDOG_NOWAYOUT unset the
+# driver still resets the board if the feeder dies without disabling the
+# card, which is the behaviour we want.
+#
+set -u
+
+DAEMON=/usr/bin/elf2-wdctl
+PIDFILE=/var/run/elf2-wdctl.pid
+DEVICE=${ELF2_WATCHDOG_DEVICE:-/dev/watchdog}
+TIMEOUT=${ELF2_WATCHDOG_TIMEOUT:-30}
+INTERVAL=${ELF2_WATCHDOG_INTERVAL:-10}
+
+running_pid() {
+	[ -r "$PIDFILE" ] || return 1
+	pid=$(cat "$PIDFILE" 2>/dev/null) || return 1
+	[ -n "$pid" ] || return 1
+	# Guard against a recycled pid: only trust it if the command matches.
+	[ -r "/proc/$pid/cmdline" ] || return 1
+	tr '\0' ' ' < "/proc/$pid/cmdline" | grep -q elf2-wdctl || return 1
+	echo "$pid"
+}
+
+start() {
+	pid=$(running_pid) && {
+		echo "already running (pid $pid)"
+		return 0
+	}
+	if [ ! -x "$DAEMON" ]; then
+		echo "FAIL: $DAEMON is missing"
+		return 1
+	fi
+	if [ ! -e "$DEVICE" ]; then
+		# No watchdog hardware exposed: nothing to feed, do not fail boot.
+		echo "SKIPPED: $DEVICE is absent"
+		return 0
+	fi
+	mkdir -p /var/run
+	if ! "$DAEMON" -d "$DEVICE" -t "$TIMEOUT" -i "$INTERVAL"; then
+		echo "FAIL: $DAEMON could not open $DEVICE"
+		return 1
+	fi
+	# The daemon backgrounds itself after the device is open; find it again.
+	pid=$(pidof elf2-wdctl 2>/dev/null | awk '{print $1}')
+	[ -n "${pid:-}" ] && echo "$pid" > "$PIDFILE"
+	echo "OK (pid ${pid:-unknown}, timeout ${TIMEOUT}s, interval ${INTERVAL}s)"
+}
+
+stop() {
+	pid=$(running_pid) || {
+		echo "not running"
+		return 0
+	}
+	kill "$pid" 2>/dev/null
+	for _ in 1 2 3 4 5; do
+		kill -0 "$pid" 2>/dev/null || break
+		sleep 0.2
+	done
+	rm -f "$PIDFILE"
+	echo "OK"
+}
+
+case "${1:-start}" in
+	start)
+		printf 'Starting watchdog feeder: '
+		start
+		;;
+	stop)
+		printf 'Stopping watchdog feeder: '
+		stop
+		;;
+	restart|reload)
+		$0 stop
+		$0 start
+		;;
+	status)
+		if pid=$(running_pid); then
+			echo "running (pid $pid)"
+		else
+			echo "not running"
+			exit 1
+		fi
+		;;
+	*)
+		echo "Usage: $0 {start|stop|restart|status}"
+		exit 1
+		;;
+esac

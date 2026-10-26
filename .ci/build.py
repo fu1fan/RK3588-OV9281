@@ -15,6 +15,7 @@ import time
 
 from fetch_deps import digest, restore
 from image import Ext4, install
+import rootfs_services
 
 SOURCE = Path(__file__).resolve().parents[1]
 DIST = SOURCE / 'dist'
@@ -218,13 +219,21 @@ def build():
         image = work/'output/buildroot/images/rootfs.ext4'
         build_identity = work/'output/ci-build-info.json'
         build_identity.write_text(json.dumps({'tag':tag,'commit':revision,'kernel_release':release}, indent=2)+'\n')
-        overlay = [(build_identity, '/etc/elf2-build-info.json')]
+        overlay = [(build_identity, '/etc/elf2-build-info.json', 0o644)]
         for name in ('S01cgroup', 'S80dnsmasq'):
-            overlay.append((work/'buildroot/board/elfboard/elf2/fs-overlay/etc/init.d'/name, '/etc/init.d/'+name))
+            overlay.append((work/'buildroot/board/elfboard/elf2/fs-overlay/etc/init.d'/name,
+                            '/etc/init.d/'+name, 0o755))
+        # Watchdog feeder, watchdog and Wi-Fi station services, built from this
+        # commit. They are written into the same ext4 image, so they end up in
+        # update.img through the normal repack step below.
+        services, service_build = rootfs_services.prepare(work, stage, toolchain+'gcc')
+        overlay.extend(services)
         fs = install(image, stage/'lib/modules', overlay, work/'output/ci-rootfs.debugfs')
+        rootfs_services.verify(fs)
         identity = json.loads(fs.run('cat /etc/elf2-build-info.json'))
         if identity['commit'] != revision:
             raise RuntimeError('Rootfs identity mismatch')
+        shutil.rmtree(service_build)
         # Compare each installed module byte-for-byte with this build's module.
         verify = work/'output/ci-module-check.ko'
         for p in module_files:
@@ -237,11 +246,17 @@ def build():
         verify_update(work, env)
         after = object_state(work)
         info.update({'kernel_release': release, 'module_count':len(module_files),
+                     'rootfs_services': sorted(target for _, target, _ in services),
                      'module_symvers_sha256':digest(work/'kernel/Module.symvers'),
                      'object_files':len(after), 'reused_object_files':sum(before.get(p)==s for p,s in after.items()),
                      'ccache_statistics': command(['ccache','--show-stats'],env=env,capture=True)})
         config = (work/'kernel/.config').read_text()
-        for symbol in ('CONFIG_VIDEO_OV9281=y','CONFIG_TUN=y','CONFIG_EXFAT_FS=y'):
+        for symbol in ('CONFIG_VIDEO_OV9281=y', 'CONFIG_TUN=y', 'CONFIG_EXFAT_FS=y',
+                       # The board watchdog is a DW one; without the driver the
+                       # feeder has no device to open.
+                       'CONFIG_WATCHDOG=y', 'CONFIG_DW_WATCHDOG=y',
+                       # iwlwifi for the AX200 is modular and must stay so.
+                       'CONFIG_IWLWIFI=m'):
             if symbol not in config.splitlines():
                 raise RuntimeError('Required kernel option missing: '+symbol)
         artifacts = {'update.img':work/'output/update/Image/update.img', 'boot.img':work/'kernel/boot.img',

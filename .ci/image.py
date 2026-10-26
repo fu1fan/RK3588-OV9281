@@ -78,14 +78,19 @@ def install(image, modules, overlay_files, script):
     files = []
     for p in sorted(Path(modules).rglob('*')):
         if p.is_file() and not p.is_symlink():
-            files.append((p, '/lib/modules/' + p.relative_to(modules).as_posix()))
-    files.extend(overlay_files)
-    for src, target in files:
+            files.append((p, '/lib/modules/' + p.relative_to(modules).as_posix(), None))
+    for entry in overlay_files:
+        # (source, target) keeps the source mode; (source, target, mode) forces one.
+        src, target = entry[0], entry[1]
+        files.append((src, target, entry[2] if len(entry) > 2 else None))
+    for src, target, mode in files:
         parent_dirs(target)
         if fs.exists(target):
             commands.append('rm ' + quoted(target))
         commands.append('write ' + quoted(src) + ' ' + quoted(target))
-        commands.append('set_inode_field ' + quoted(target) + ' mode 0' + format(stat.S_IFREG | (Path(src).stat().st_mode & 0o777), 'o'))
+        if mode is None:
+            mode = Path(src).stat().st_mode & 0o777
+        commands.append('set_inode_field ' + quoted(target) + ' mode 0' + format(stat.S_IFREG | mode, 'o'))
         commands.append('set_inode_field ' + quoted(target) + ' uid 0')
         commands.append('set_inode_field ' + quoted(target) + ' gid 0')
     fs.apply(commands, script)
