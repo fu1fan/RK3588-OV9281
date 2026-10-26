@@ -6,9 +6,11 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import build
+import publish
 from image import Ext4, install
 
 
@@ -81,3 +83,18 @@ class RootfsTests(unittest.TestCase):
 
 
 if __name__=='__main__':unittest.main()
+
+
+class PublicationTests(unittest.TestCase):
+    def test_cnb_media_type_and_token_are_restricted_to_api_host(self):
+        with mock.patch.dict(os.environ, {'CNB_TOKEN':'test-only', 'CNB_REPO_SLUG':'owner/repo'}):
+            api=publish.API()
+        response=mock.MagicMock()
+        response.__enter__.return_value.read.return_value=b'[]'
+        with mock.patch('urllib.request.urlopen',return_value=response) as send:
+            self.assertEqual(api.request('GET','/git/commit-assets/example'),[])
+            request=send.call_args.args[0]
+            self.assertEqual(request.get_header('Accept'),'application/vnd.cnb.api+json')
+            self.assertEqual(request.get_header('Authorization'),'Bearer test-only')
+            with self.assertRaises(RuntimeError):api.request('POST','https://another.example/verify')
+            self.assertEqual(send.call_count,1)
