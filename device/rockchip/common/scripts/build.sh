@@ -166,6 +166,13 @@ get_toolchain()
 		TC_VENDOR=rockchip
 	fi
 
+	# CI-only compiler wrapper; default SDK toolchain selection is unchanged.
+	if [ "$TC_ARCH" = aarch64 ] && [ -n "$RK_CI_AARCH64_TOOLCHAIN" ]; then
+		[ -x "${RK_CI_AARCH64_TOOLCHAIN}gcc" ] || return 1
+		echo "$RK_CI_AARCH64_TOOLCHAIN"
+		return 0
+	fi
+
 	TC_DIR="$RK_SDK_DIR/prebuilts/gcc/linux-x86/$TC_ARCH"
 	if [ "$TC_VENDOR" ]; then
 		TC_PATTERN="$TC_ARCH-$TC_VENDOR-$TC_OS-[^-]*-gcc"

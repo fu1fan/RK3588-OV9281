@@ -1,0 +1,50 @@
+"system-v*":
+  tag_push:
+    - &system_build
+      name: elf2-system
+      runner:
+        tags: cnb:arch:amd64
+        cpus: 16
+      lock:
+        key: elf2-system-cache-v1
+        wait: true
+        timeout: 7200
+        expires: 10800
+      docker:
+        build:
+          dockerfile: .ci/Dockerfile
+          by:
+            - .ci/fetch_deps.py
+            - docs/migration/dependencies.json
+          versionBy:
+            - .ci/Dockerfile
+            - .ci/fetch_deps.py
+            - docs/migration/dependencies.json
+          sync: true
+        volumes:
+          - elf2-system-v1:/cache/elf2-work:copy-on-write
+          - elf2-system-v1:/cache/elf2-ccache:copy-on-write
+      stages:
+        - name: Check cache and rootfs assembly behavior
+          script: python3 -m unittest discover -s .ci/tests -v
+          timeout: 5m
+        - name: Build and verify system image
+          script: python3 .ci/build.py
+          timeout: 60m
+        - name: Publish verified artifacts
+          script: python3 .ci/publish.py
+          timeout: 30m
+        - name: Commit successful build cache
+          script: python3 .ci/build.py --finish
+      failStages:
+        - name: Preserve failure evidence
+          script: python3 .ci/publish.py --failure
+          timeout: 10m
+          allowFailure: true
+"$":
+  web_trigger_clean:
+    - <<: *system_build
+      name: elf2-system-clean
+      env:
+        ELF2_BUILD_MODE: clean
+

@@ -989,3 +989,10 @@
 /tools/linux/Linux_SecurityAVB/avb_keys/testkey_prk.pem
 /tools/linux/Linux_SecurityAVB/avb_keys/testkey_psk.pem
 /tools/linux/Linux_SecurityAVB/avb_keys/testkey_puk.pem
+
+# CI-owned generated files
+/dist/
+/.ci-state.json
+/.ci-toolchain/
+__pycache__/
+*.pyc
