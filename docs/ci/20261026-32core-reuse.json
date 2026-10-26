@@ -1,0 +1,12 @@
+{
+  "commit": "a389cda0ae39a91028340f30d50980d7eef636d9",
+  "parallel_jobs": 32,
+  "first_seconds": 265.06,
+  "second_seconds": 119.83,
+  "first_cache_hit": false,
+  "second_cache_hit": true,
+  "reused_objects": 4819,
+  "total_objects": 4827,
+  "second_ccache_statistics": "Summary:\n  Hits:             348 /   352 (98.86 %)\n    Direct:         348 /   509 (68.37 %)\n    Preprocessed:     0 /    10 (0.00 %)\n  Misses:             4\n    Direct:         161\n    Preprocessed:    10\n  Uncacheable:      276\nPrimary storage:\n  Hits:             696 /   867 (80.28 %)\n  Misses:           171\n  Cache size (GB): 0.56 / 10.00 (5.61 %)\n\nUse the -v/--verbose option for more details.",
+  "same_node_same_workspace": true
+}

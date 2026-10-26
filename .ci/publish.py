@@ -112,7 +112,7 @@ def publish(failure=False):
                 releases=api.request('GET','/releases?page=1&page_size=100')
                 release=next((r for r in releases if r['tag_name']==tag),None)
                 if release:
-                    if release.get('tag_commitish', release.get('target_commitish')) not in (commit,tag):
+                    if release.get('tag_commitish', release.get('target_commitish')) not in (commit,tag,'refs/tags/'+tag):
                         raise RuntimeError('Existing release points to a different source')
                 else:
                     body=next(DIST.glob('*-RELEASE.md')).read_text()
