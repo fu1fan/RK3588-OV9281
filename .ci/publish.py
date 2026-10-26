@@ -33,7 +33,7 @@ class API:
             raise RuntimeError('Refusing to send pipeline token to another host')
         data = json.dumps(body).encode() if body is not None else (b'' if method=='POST' else None)
         request = urllib.request.Request(url, data=data, method=method,
-            headers={'Authorization':'Bearer '+self.token,'Content-Type':'application/json','User-Agent':'ELF2-CNB-builder/1'})
+            headers={'Accept':'application/vnd.cnb.api+json','Authorization':'Bearer '+self.token,'Content-Type':'application/json','User-Agent':'ELF2-CNB-builder/1'})
         try:
             with urllib.request.urlopen(request, timeout=90) as response:
                 data=response.read()

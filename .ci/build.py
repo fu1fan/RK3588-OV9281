@@ -131,6 +131,9 @@ def finish():
 def build():
     global LOG
     start = time.monotonic()
+    for tool in ('hexdump', 'ccache', 'debugfs', 'depmod', 'dumpimage'):
+        if not shutil.which(tool):
+            raise RuntimeError('Missing build prerequisite: '+tool)
     if DIST.exists():
         assert DIST.parent == SOURCE and DIST.name == 'dist'
         shutil.rmtree(DIST)

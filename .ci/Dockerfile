@@ -2,7 +2,7 @@ FROM ubuntu:22.04
 ARG DEBIAN_FRONTEND=noninteractive
 ENV LANG=C.UTF-8 LC_ALL=C.UTF-8 TZ=Asia/Shanghai
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    bash bc bison build-essential ca-certificates ccache cpio curl device-tree-compiler \
+    bash bc bison bsdextrautils build-essential ca-certificates ccache cpio curl device-tree-compiler \
     dpkg-dev e2fsprogs expect fakeroot file flex git jq kmod libgmp-dev libmpc-dev \
     libncurses-dev libssl-dev lz4 lzop pkg-config python2 python3 rsync swig \
     u-boot-tools unzip wget xz-utils zip \
