@@ -5527,104 +5527,89 @@ int rkcif_init_rx_buf(struct rkcif_stream *stream, int buf_num)
 	}
 }
 
-static int rkcif_create_dummy_buf(struct rkcif_stream *stream, bool reuse)
+static int rkcif_dummy_size(u32 width, u32 height, u32 code, u32 *size)
+{
+	u32 bytes_per_pixel = 2;
+	u64 pixels = (u64)width * height;
+
+	if (!pixels)
+		return -EINVAL;
+	if (code == MEDIA_BUS_FMT_RGB888_1X24 ||
+	    code == MEDIA_BUS_FMT_BGR888_1X24 ||
+	    code == MEDIA_BUS_FMT_GBR888_1X24)
+		bytes_per_pixel = 3;
+	/* rkcif_alloc_buffer page-aligns the u32 size before allocation. */
+	if (pixels > (U32_MAX - (PAGE_SIZE - 1)) / bytes_per_pixel)
+		return -EOVERFLOW;
+	*size = pixels * bytes_per_pixel;
+	return 0;
+}
+
+static int rkcif_create_dummy_buf(struct rkcif_stream *stream)
 {
 	struct rkcif_device *dev = stream->cifdev;
 	struct rkcif_hw *hw = dev->hw_dev;
 	struct rkcif_dummy_buffer *dummy_buf = &hw->dummy_buf;
-	struct rkcif_device *tmp_dev = NULL;
+	struct rkcif_device *tmp_dev;
 	struct v4l2_subdev_frame_interval_enum fie;
 	struct v4l2_subdev_format fmt;
-	u32 max_size = 0;
-	u32 size = 0;
-	int ret = 0;
-	int i, j;
-
-	/*
-	 * The dummy buffer is shared by every CIF device on this hardware.
-	 * reuse keeps the previous allocation across stream-to-stream
-	 * transitions instead of repurposing (and later freeing) it.
-	 */
-	if (!reuse && dummy_buf->vaddr)
-		return 0;
+	u32 max_size = 0, size;
+	int ret, i, j;
 
 	for (i = 0; i < hw->dev_num; i++) {
 		tmp_dev = hw->cif_dev[i];
-		if (tmp_dev->terminal_sensor.sd) {
-			for (j = 0; j < 32; j++) {
-				memset(&fie, 0, sizeof(fie));
-				fie.index = j;
-				fie.pad = 0;
-				fie.which = V4L2_SUBDEV_FORMAT_ACTIVE;
-				ret = v4l2_subdev_call(tmp_dev->terminal_sensor.sd,
-						       pad, enum_frame_interval,
-						       NULL, &fie);
-				if (!ret) {
-					if (fie.code == MEDIA_BUS_FMT_RGB888_1X24 ||
-					    fie.code == MEDIA_BUS_FMT_BGR888_1X24 ||
-					    fie.code == MEDIA_BUS_FMT_GBR888_1X24)
-						size = fie.width * fie.height * 3;
-					else
-						size = fie.width * fie.height * 2;
-					v4l2_dbg(1, rkcif_debug, &dev->v4l2_dev,
-						 "%s enum fmt, width %d, height %d\n",
-						 __func__, fie.width, fie.height);
-				} else {
-					break;
-				}
-				if (size > max_size)
-					max_size = size;
-			}
-		} else {
+		if (!tmp_dev->terminal_sensor.sd)
 			continue;
+		for (j = 0; j < 32; j++) {
+			memset(&fie, 0, sizeof(fie));
+			fie.index = j;
+			fie.which = V4L2_SUBDEV_FORMAT_ACTIVE;
+			ret = v4l2_subdev_call(tmp_dev->terminal_sensor.sd,
+					       pad, enum_frame_interval, NULL, &fie);
+			if (ret)
+				break;
+			ret = rkcif_dummy_size(fie.width, fie.height, fie.code, &size);
+			if (ret)
+				return ret;
+			if (size > max_size)
+				max_size = size;
 		}
-	}
-
-	if (max_size == 0 && dev->terminal_sensor.sd) {
+		/* Check every sensor, including those without interval enumeration.
+		 * Initialize pad and reserved fields before the active-format query.
+		 */
+		memset(&fmt, 0, sizeof(fmt));
 		fmt.which = V4L2_SUBDEV_FORMAT_ACTIVE;
-		ret = v4l2_subdev_call(dev->terminal_sensor.sd,
+		ret = v4l2_subdev_call(tmp_dev->terminal_sensor.sd,
 				       pad, get_fmt, NULL, &fmt);
 		if (!ret) {
-			if (fmt.format.code == MEDIA_BUS_FMT_RGB888_1X24 ||
-			    fmt.format.code == MEDIA_BUS_FMT_BGR888_1X24 ||
-			    fmt.format.code == MEDIA_BUS_FMT_GBR888_1X24)
-				size = fmt.format.width  * fmt.format.height * 3;
-			else
-				size = fmt.format.width * fmt.format.height * 2;
+			ret = rkcif_dummy_size(fmt.format.width, fmt.format.height,
+					       fmt.format.code, &size);
+			if (ret)
+				return ret;
 			if (size > max_size)
 				max_size = size;
 		}
 	}
-
 	if (!max_size) {
-		/*
-		 * Nothing in the pipeline reported a usable frame interval or
-		 * format. Allocating a zero sized dummy buffer used to reach
-		 * vb2 as a 0-byte request and fail with -ENOMEM, which then
-		 * aborted the whole start_stream() call.
-		 */
 		v4l2_err(&dev->v4l2_dev,
-			 "No usable sensor frame size for dummy buffer, size 0\n");
+			 "No usable sensor frame size for dummy buffer\n");
 		return -EINVAL;
 	}
 
 	dummy_buf->size = max_size;
-
 	dummy_buf->is_need_vaddr = true;
 	dummy_buf->is_need_dbuf = true;
 	ret = rkcif_alloc_buffer(dev, dummy_buf);
 	if (ret) {
 		v4l2_err(&dev->v4l2_dev,
-			 "Failed to allocate the memory for dummy buffer, size 0x%08x ret %d\n",
+			 "Failed to allocate dummy buffer, size 0x%08x ret %d\n",
 			 max_size, ret);
 		dummy_buf->size = 0;
 		return ret;
 	}
-
 	v4l2_info(&dev->v4l2_dev, "Allocate dummy buffer, size: 0x%08x\n",
 		  dummy_buf->size);
-
-	return ret;
+	return 0;
 }
 
 static void rkcif_destroy_dummy_buf(struct rkcif_stream *stream)
@@ -7254,7 +7239,7 @@ int rkcif_do_start_stream(struct rkcif_stream *stream, enum rkcif_stream_mode mo
 	     dev->is_use_dummybuf) &&
 	    (!dev->hw_dev->dummy_buf.vaddr) &&
 	    mode == RKCIF_STREAM_MODE_CAPTURE) {
-		ret = rkcif_create_dummy_buf(stream, false);
+		ret = rkcif_create_dummy_buf(stream);
 		if (ret < 0) {
 			mutex_unlock(&hw_dev->dev_lock);
 			v4l2_err(v4l2_dev, "Failed to create dummy_buf, %d\n", ret);

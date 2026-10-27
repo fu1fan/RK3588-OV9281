@@ -6,7 +6,7 @@
 # any kind are shipped in the image.
 #
 # Values are plain text after the first '=' - no shell quoting, no escapes.
-# A passphrase is a literal string, so it must not end in a space.
+# Quotes, backslashes and spaces are literal characters; no shell evaluation.
 #
 # Which interface to use. Leave empty to take the first wireless interface
 # the kernel registers. Set it explicitly to pin the STA role to one radio
@@ -16,11 +16,9 @@ IFACE=
 SSID=
 # WPA passphrase (8-63 characters) for KEY_MGMT=WPA-PSK, or empty for open.
 PSK=
-# One of WPA-PSK (WPA2/WPA3 personal) or NONE (open network).
+# One of WPA-PSK (WPA/WPA2 personal) or NONE (open network).
 KEY_MGMT=WPA-PSK
 # nl80211 is the only driver interface the AX200/iwiwifi stack supports here.
 DRIVER=nl80211
-# How long to wait for association and for DHCP. Both are bounded; a
-# failure is reported but never blocks the network stack.
-ASSOC_TIMEOUT=20
-DHCP_TIMEOUT=20
+# Association and DHCP continue retrying in the background.
+# start does not wait for a lease; use restart after changing this file.

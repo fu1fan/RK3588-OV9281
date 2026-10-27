@@ -54,7 +54,7 @@ start() {
 	# The daemon backgrounds itself after the device is open; find it again.
 	pid=$(pidof elf2-wdctl 2>/dev/null | awk '{print $1}')
 	[ -n "${pid:-}" ] && echo "$pid" > "$PIDFILE"
-	echo "OK (pid ${pid:-unknown}, timeout ${TIMEOUT}s, interval ${INTERVAL}s)"
+	echo "OK (pid ${pid:-unknown}, requested timeout ${TIMEOUT}s, requested interval ${INTERVAL}s)"
 }
 
 stop() {

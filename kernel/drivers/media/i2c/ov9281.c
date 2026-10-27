@@ -1080,10 +1080,11 @@ static int ov9281_enum_frame_interval(struct v4l2_subdev *sd,
 	 * rkcif asks for the largest frame with code unset; rejecting that
 	 * left it with no size at all for its dummy buffer.
 	 */
-	if (fie->code != MEDIA_BUS_FMT_FIXED &&
+	if (fie->code != 0 &&
 	    fie->code != supported_modes[fie->index].bus_fmt)
 		return -EINVAL;
 
+	fie->code = supported_modes[fie->index].bus_fmt;
 	fie->width = supported_modes[fie->index].width;
 	fie->height = supported_modes[fie->index].height;
 	fie->interval = supported_modes[fie->index].max_fps;

@@ -6,7 +6,7 @@
 |---|---|---|
 | 看门狗导致约 40–90 秒复位 | elf2-wdctl + S80watchdog | 已固化为源码 + rootfs 安装链，见下 |
 | Wi-Fi STA 开机关联与 DHCP | S36wifistation | 已固化为源码 + rootfs 安装链，见下 |
-| CIF dummy buffer 导致 STREAMON / ENOMEM | 启流前写 is_use_dummybuf=0 | 改为内核修复，不再需要 sysfs 绕过 |
+| CIF dummy buffer 导致 STREAMON / ENOMEM | 启流前写 is_use_dummybuf=0 | 源码修正尺寸查询；能否替代板上绕过仍待硬件验收 |
 | Web 预览、用户态 AE、录像等应用 | elf2-camweb / S85elf2-camweb 等 | 独立应用，仍未导入 |
 
 前两项已改为本仓库源码，由 `.ci/rootfs_services.py` 交叉编译/校验后写入最终 rootfs；板上

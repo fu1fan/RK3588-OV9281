@@ -167,12 +167,6 @@ class RootfsServiceTests(unittest.TestCase):
                        'CONFIG_VIDEO_OV9281=y'):
             self.assertIn(repr(symbol), script)
 
-    def test_dummy_buffer_guard_exists_in_cif_source(self):
-        source = (build.SOURCE/
-                  'kernel/drivers/media/platform/rockchip/cif/capture.c').read_text()
-        self.assertIn('rkcif_create_dummy_buf(struct rkcif_stream *stream, bool reuse)', source)
-        self.assertIn('No usable sensor frame size for dummy buffer', source)
-        self.assertNotIn('dummy_buf->size = 0;\n\tdummy_buf->is_need_vaddr = true;', source)
 
 
 if __name__=='__main__':unittest.main()

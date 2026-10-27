@@ -1,223 +1,128 @@
 #!/bin/sh
-#
-# Bring up one Wi-Fi interface as a station, if and only if it is configured.
-#
-# The default install ships no SSID and no passphrase, so a plain boot does
-# nothing here: no wpa_supplicant is spawned, no DHCP client runs, and the
-# boot sequence is not delayed. /etc/wifistation.conf is filled in by the
-# owner of the board (or by a provisioning step) when STA mode is wanted.
-#
-# Everything that waits is bounded: the driver may take a while to probe, an
-# AP may be out of range, and a DHCP server may never answer. None of those
-# may hold up the rest of rcS or, more importantly, the watchdog feeder,
-# which runs before this script and keeps feeding from its own thread.
-#
+# One station, with private runtime files and DHCP retries after late association.
 set -u
-
-CONF=/tmp/tmp.JiudL4XYrh/etc/wifistation.conf
-PIDDIR=/tmp/tmp.JiudL4XYrh/var/run
-WPACONF=/tmp/tmp.JiudL4XYrh/etc/wpa.conf
+CONF=/etc/wifistation.conf
+PIDDIR=/var/run/wifistation
 IFACE=
 SSID=
-KEY_MGMT=WPA-PSK
 PSK=
+KEY_MGMT=WPA-PSK
 DRIVER=nl80211
-DISCOVER_TIMEOUT=1
-ASSOC_TIMEOUT=20
-DHCP_TIMEOUT=20
 
-log() {
-	echo "$*"
-}
-
-# Read KEY=VALUE pairs. Values are not shell-evaluated, so a passphrase with
-# spaces or punctuation cannot inject commands.
 read_conf() {
-	[ -r "$CONF" ] || return 1
-	while IFS='=' read -r key value; do
-		case "$key" in
-			''|'#'*) continue ;;
-			IFACE) IFACE=$value ;;
-			SSID) SSID=$value ;;
-			PSK) PSK=$value ;;
-			KEY_MGMT) KEY_MGMT=$value ;;
-			DRIVER) DRIVER=$value ;;
-			ASSOC_TIMEOUT) ASSOC_TIMEOUT=$value ;;
-			DHCP_TIMEOUT) DHCP_TIMEOUT=$value ;;
-			*) log "ignoring unknown setting: $key" ;;
-		esac
-	done < "$CONF"
-	[ -n "$SSID" ]
+ [ -r "$CONF" ] || return 1
+ while IFS='=' read -r key value || [ -n "$key" ]; do
+  case "$key" in
+   IFACE) IFACE=$value;; SSID) SSID=$value;; PSK) PSK=$value;;
+   KEY_MGMT) KEY_MGMT=$value;; DRIVER) DRIVER=$value;;
+  esac
+ done < "$CONF"
+ [ -n "$SSID" ]
 }
-
-# Prefer the configured name, otherwise look for a wireless interface that is
-# not already up as an access point. Never guess more than one: two stations
-# fighting over wpa_supplicant state is worse than a clear error.
-discover_iface() {
-	for candidate in /sys/class/net/*; do
-		name=${candidate##*/}
-		[ "$name" = lo ] && continue
-		[ -d "$candidate/wireless" ] || [ -e "$candidate/phy80211" ] || continue
-		echo "$name"
-		return 0
-	done
-	return 1
+valid_iface() {
+ case "$1" in ''|*[!a-zA-Z0-9_.:-]*) return 1;; esac
+ [ ${#1} -le 15 ]
 }
-
-wait_for_iface() {
-	deadline=$(( $(date +%s) + DISCOVER_TIMEOUT ))
-	while [ "$(date +%s)" -lt "$deadline" ]; do
-		[ -n "${IFACE:-}" ] || IFACE=$(discover_iface) || IFACE=
-		[ -n "${IFACE:-}" ] && [ -e "/sys/class/net/$IFACE" ] && return 0
-		sleep 1
-	done
-	return 1
+# Match NUL-delimited argv tokens, including the private config/pid path.
+owned_pid() {
+ file=$1; program=$2; flag=$3; marker=$4
+ [ -r "$file" ] || return 1
+ pid=$(cat "$file")
+ case "$pid" in ''|*[!0-9]*) return 1;; esac
+ [ "$pid" -gt 1 ] && [ -r "/proc/$pid/cmdline" ] || return 1
+ tr '\000' '\n' < "/proc/$pid/cmdline" | awk -v p="$program" -v f="$flag" -v m="$marker" '
+  NR == 1 { n=split($0,a,"/"); executable=(a[n]==p) }
+  previous == f && $0 == m { marker=1 }
+  { previous=$0 }
+  END { exit !(executable && marker) }' || return 1
+ echo "$pid"
 }
-
-write_wpa_conf() {
-	umask 077
-	{
-		echo "ctrl_interface=$PIDDIR/wpa_supplicant"
-		echo "ap_scan=1"
-		echo "update_config=0"
-		echo
-		echo "network={"
-		echo "	ssid=\"$SSID\""
-		case "$KEY_MGMT" in
-			NONE|none)
-				echo "	key_mgmt=NONE"
-				;;
-			*)
-				[ -n "${PSK:-}" ] || return 1
-				echo "	key_mgmt=$KEY_MGMT"
-				echo "	psk=\"$PSK\""
-				;;
-		esac
-		echo "}"
-	} > "$WPACONF"
+stop_one() {
+ if pid=$(owned_pid "$1" "$2" "$3" "$4"); then
+  kill "$pid" 2>/dev/null || return 1
+  for delay in 1 2 3 4 5; do
+   owned_pid "$1" "$2" "$3" "$4" >/dev/null || break
+   sleep 1
+  done
+  if owned_pid "$1" "$2" "$3" "$4" >/dev/null; then
+   echo "FAIL: $2 did not stop"; return 1
+  fi
+ fi
+ rm -f "$1"
 }
-
-wpa_pid() {
-	[ -r "$PIDDIR/wpa_supplicant-$IFACE.pid" ] || return 1
-	pid=$(cat "$PIDDIR/wpa_supplicant-$IFACE.pid" 2>/dev/null) || return 1
-	[ -r "/proc/$pid/cmdline" ] || return 1
-	tr '\0' ' ' < "/proc/$pid/cmdline" | grep -q "wpa_supplicant .*-i$IFACE" || return 1
-	echo "$pid"
-}
-
-udhcpc_pid() {
-	[ -r "$PIDDIR/udhcpc-$IFACE.pid" ] || return 1
-	pid=$(cat "$PIDDIR/udhcpc-$IFACE.pid" 2>/dev/null) || return 1
-	[ -r "/proc/$pid/cmdline" ] || return 1
-	tr '\0' ' ' < "/proc/$pid/cmdline" | grep -q "udhcpc .*-i $IFACE" || return 1
-	echo "$pid"
-}
-
-associate() {
-	deadline=$(( $(date +%s) + ASSOC_TIMEOUT ))
-	while [ "$(date +%s)" -lt "$deadline" ]; do
-		state=$(wpa_cli -i "$IFACE" -p "$PIDDIR/wpa_supplicant" status 2>/dev/null |
-			sed -n 's/^wpa_state=//p')
-		[ "$state" = COMPLETED ] && return 0
-		sleep 1
-	done
-	return 1
-}
-
-start() {
-	if ! read_conf; then
-		log "no SSID configured in $CONF, STA mode disabled"
-		return 0
-	fi
-	for tool in wpa_supplicant wpa_cli udhcpc ifconfig; do
-		command -v "$tool" >/dev/null 2>&1 || {
-			log "FAIL: $tool is not installed"
-			return 1
-		}
-	done
-	if ! wait_for_iface; then
-		log "FAIL: no wireless interface within ${DISCOVER_TIMEOUT}s"
-		return 1
-	fi
-	if ! write_wpa_conf; then
-		log "FAIL: KEY_MGMT=$KEY_MGMT needs a PSK"
-		return 1
-	fi
-
-	if pid=$(wpa_pid); then
-		log "wpa_supplicant already running on $IFACE (pid $pid)"
-	fi
-	if [ -z "${pid:-}" ]; then
-		ifconfig "$IFACE" up || {
-			log "FAIL: cannot bring $IFACE up"
-			return 1
-		}
-		# No pipe around the daemon: a pipeline keeps a shell alive as the
-		# parent of the background service and delays rcS teardown.
-		wpa_supplicant -B -D "$DRIVER" -i "$IFACE" -c "$WPACONF" \
-			-P "$PIDDIR/wpa_supplicant-$IFACE.pid" >/dev/null 2>&1
-		if ! pid=$(wpa_pid); then
-			log "FAIL: wpa_supplicant did not start on $IFACE"
-			return 1
-		fi
-	fi
-
-	if ! associate; then
-		log "WARN: not associated with \"$SSID\" within ${ASSOC_TIMEOUT}s"
-		log "      wpa_supplicant keeps retrying in the background"
-		return 0
-	fi
-
-	if pid=$(udhcpc_pid); then
-		log "udhcpc already running on $IFACE (pid $pid)"
-		return 0
-	fi
-	pidfile="$PIDDIR/udhcpc-$IFACE.pid"
-	udhcpc -b -R -p "$pidfile" -i "$IFACE" -t 3 -T 3 -A 5 >/dev/null 2>&1
-	if pid=$(udhcpc_pid); then
-		log "OK: associated with \"$SSID\" on $IFACE, DHCP running (pid $pid)"
-	else
-		log "WARN: associated with \"$SSID\" but no DHCP client started"
-	fi
-	return 0
-}
-
 stop() {
-	iface=${IFACE:-}
-	[ -n "$iface" ] || iface=$(discover_iface) || iface=
-	[ -n "$iface" ] || {
-		log "no wireless interface, nothing to stop"
-		return 0
-	}
-	# Only ever signal the process this service started for this interface.
-	if pid=$(udhcpc_pid); then
-		kill "$pid" 2>/dev/null
-		rm -f "$PIDDIR/udhcpc-$iface.pid"
-	fi
-	if pid=$(wpa_pid); then
-		kill "$pid" 2>/dev/null
-		rm -f "$PIDDIR/wpa_supplicant-$iface.pid"
-	fi
-	ifconfig "$iface" down 2>/dev/null
-	log "OK ($iface)"
+ [ -r "$PIDDIR/interface" ] || return 0
+ IFACE=$(cat "$PIDDIR/interface")
+ valid_iface "$IFACE" || return 1
+ stop_one "$PIDDIR/dhcp.pid" udhcpc -p "$PIDDIR/dhcp.pid" || return 1
+ stop_one "$PIDDIR/wpa.pid" wpa_supplicant -c "$PIDDIR/wpa.conf" || return 1
+ ifconfig "$IFACE" down || return 1
+ rm -f "$PIDDIR/interface" "$PIDDIR/wpa.conf"
 }
-
+start() {
+ if ! read_conf; then
+  echo "STA mode disabled: no SSID configured in $CONF"; return 0
+ fi
+ for tool in wpa_supplicant udhcpc ifconfig; do
+  command -v "$tool" >/dev/null || { echo "FAIL: $tool is not installed"; return 1; }
+ done
+ if [ -r "$PIDDIR/interface" ]; then
+  if owned_pid "$PIDDIR/wpa.pid" wpa_supplicant -c "$PIDDIR/wpa.conf" >/dev/null &&
+     owned_pid "$PIDDIR/dhcp.pid" udhcpc -p "$PIDDIR/dhcp.pid" >/dev/null; then
+   echo 'already running; use restart to apply configuration'; return 0
+  fi
+  stop || return 1
+  read_conf || return 1
+ fi
+ for delay in 1 2 3 4 5 6 7 8 9 10; do
+  if [ -z "$IFACE" ]; then
+   for candidate in /sys/class/net/*; do
+    if [ -d "$candidate/wireless" ] || [ -e "$candidate/phy80211" ]; then
+     IFACE=${candidate##*/}; break
+    fi
+   done
+  fi
+  if valid_iface "$IFACE" && [ -e "/sys/class/net/$IFACE" ]; then break; fi
+  sleep 1
+ done
+ valid_iface "$IFACE" && [ -e "/sys/class/net/$IFACE" ] || {
+  echo 'FAIL: no wireless interface'; return 1;
+ }
+ case "$KEY_MGMT" in
+  NONE) ;;
+  WPA-PSK) [ ${#PSK} -ge 8 ] && [ ${#PSK} -le 63 ] || { echo 'FAIL: WPA-PSK needs a PSK of 8-63 characters'; return 1; };;
+  *) echo 'FAIL: unsupported KEY_MGMT'; return 1;;
+ esac
+ [ ${#SSID} -le 32 ] || return 1
+ umask 077
+ mkdir -p "$PIDDIR" || return 1
+ # Hex SSIDs and escaped passphrases preserve quotes/backslashes as data.
+ ssid_hex=$(printf '%s' "$SSID" | od -An -tx1 | tr -d ' \n')
+ escaped_psk=$(printf '%s' "$PSK" | sed 's/\\/\\\\/g; s/"/\\"/g')
+ {
+  printf 'ctrl_interface=%s/control\nnetwork={\n ssid=%s\n key_mgmt=%s\n' "$PIDDIR" "$ssid_hex" "$KEY_MGMT"
+  [ "$KEY_MGMT" = NONE ] || printf ' psk="%s"\n' "$escaped_psk"
+  printf '}\n'
+ } > "$PIDDIR/wpa.conf" || return 1
+ printf '%s\n' "$IFACE" > "$PIDDIR/interface"
+ ifconfig "$IFACE" up || { stop; return 1; }
+ wpa_supplicant -B -D "$DRIVER" -i "$IFACE" -c "$PIDDIR/wpa.conf" -P "$PIDDIR/wpa.pid" || { stop; return 1; }
+ owned_pid "$PIDDIR/wpa.pid" wpa_supplicant -c "$PIDDIR/wpa.conf" >/dev/null || { stop; return 1; }
+ # Foreground mode plus shell backgrounding returns immediately. Without -n
+ # or -q, udhcpc keeps retrying and renewing even when the AP appears later.
+ udhcpc -f -R -p "$PIDDIR/dhcp.pid" -i "$IFACE" -t 3 -T 3 -A 5 >/dev/null 2>&1 &
+ echo "$!" > "$PIDDIR/dhcp.pid"
+ sleep 1
+ owned_pid "$PIDDIR/dhcp.pid" udhcpc -p "$PIDDIR/dhcp.pid" >/dev/null || { stop; return 1; }
+ echo "OK: station and persistent DHCP started on $IFACE"
+}
+# Serialize start/stop/restart so ownership files cannot race.
+umask 077
+mkdir -p "$PIDDIR" || exit 1
+mkdir "$PIDDIR/lock" 2>/dev/null || { echo 'FAIL: station operation already running'; exit 1; }
+trap 'rmdir "$PIDDIR/lock"' EXIT
+trap 'exit 1' HUP INT TERM
 case "${1:-start}" in
-	start)
-		printf 'Starting Wi-Fi station: '
-		start
-		;;
-	stop)
-		printf 'Stopping Wi-Fi station: '
-		stop
-		;;
-	restart|reload)
-		$0 stop
-		read_conf || true
-		$0 start
-		;;
-	*)
-		echo "Usage: $0 {start|stop|restart}"
-		exit 1
-		;;
+ start) start;; stop) stop;; restart|reload) stop && start;;
+ *) echo "Usage: $0 {start|stop|restart}"; exit 1;;
 esac

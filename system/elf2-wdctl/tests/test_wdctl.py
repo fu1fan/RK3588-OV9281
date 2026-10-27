@@ -35,7 +35,7 @@ class WatchdogControlTests(unittest.TestCase):
         cls.binary = cls.root / 'elf2-wdctl'
         subprocess.run([os.environ.get('CC', 'cc'), '-O2', '-Wall', '-Wextra',
                         '-Werror', '-o', str(cls.binary), str(SOURCE / 'elf2-wdctl.c'),
-                        str(HERE / 'wdt-fake-ioctl.c'), '-Wl,--wrap=ioctl',
+                        str(HERE / 'wdt-fake-ioctl.c'), '-Wl,--wrap=ioctl', '-Wl,--wrap=pthread_create',
                         '-lpthread'], check=True)
         cls.device = cls.root / 'watchdog'
         cls.device.write_bytes(b'')
@@ -44,11 +44,12 @@ class WatchdogControlTests(unittest.TestCase):
     def tearDownClass(cls):
         cls.tmp.cleanup()
 
-    def start(self, name, interval='1'):
+    def start(self, name, interval='1', extra_env=None):
         log = self.root / (name + '.log')
         log.unlink(missing_ok=True)
         errors = self.root / (name + '.err')
         env = dict(os.environ, ELF2_WDCTL_TEST_LOG=str(log))
+        env.update(extra_env or {})
         with errors.open('wb') as sink:
             process = subprocess.Popen(
                 [str(self.binary), '-f', '-d', str(self.device), '-t', '30',
@@ -69,6 +70,44 @@ class WatchdogControlTests(unittest.TestCase):
         process.send_signal(signal.SIGTERM)
         self.assertEqual(process.wait(timeout=5), 0)
         self.assertIn('setoptions 1', log.read_text())
+
+    def test_actual_timeout_shortens_interval(self):
+        process, log, errors = self.start('short', interval='10',
+            extra_env={'ELF2_WDCTL_TEST_TIMEOUT': '2'})
+        self.assertTrue(wait_for(lambda: kicks(log) >= 3, timeout=3))
+        self.assertIn('actual timeout 2s, kick interval 1s', errors.read_text())
+        self.assertIsNone(process.poll())
+
+    def test_set_failure_uses_current_timeout(self):
+        process, log, errors = self.start('set-fail', interval='10',
+            extra_env={'ELF2_WDCTL_TEST_TIMEOUT': '2', 'ELF2_WDCTL_TEST_FAIL': 'set'})
+        self.assertTrue(wait_for(lambda: kicks(log) >= 3, timeout=3))
+        self.assertIn('actual timeout 2s, kick interval 1s', errors.read_text())
+        self.assertIsNone(process.poll())
+
+    def test_unknown_timeout_or_initial_kick_failure_is_fatal(self):
+        for failure in ['get', 'kick']:
+            process, log, errors = self.start('failure-'+failure,
+                extra_env={'ELF2_WDCTL_TEST_FAIL': failure})
+            self.assertEqual(process.wait(timeout=3), 1, errors.read_text())
+            self.assertEqual(kicks(log), 0)
+
+    def test_runtime_keepalive_failure_is_reported(self):
+        process, log, errors = self.start('later', extra_env={'ELF2_WDCTL_TEST_FAIL': 'later'})
+        self.assertEqual(process.wait(timeout=4), 1, errors.read_text())
+        self.assertNotIn('setoptions', log.read_text())
+
+    def test_malformed_options_are_rejected(self):
+        for args in [['-t', '-1'], ['-t', '4294967296'], ['-i', '1oops'], ['foo'], ['-foreground']]:
+            result = subprocess.run([str(self.binary), *args], capture_output=True)
+            self.assertEqual(result.returncode, 2, args)
+
+    def test_daemon_parent_reports_thread_start_failure(self):
+        env = dict(os.environ, ELF2_WDCTL_TEST_FAIL='thread')
+        result = subprocess.run([str(self.binary), '-d', str(self.device)],
+                                env=env, capture_output=True, timeout=3)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn(b'cannot start kick thread', result.stderr)
 
     def test_missing_device_fails_without_starting_a_daemon(self):
         env = dict(os.environ, ELF2_WDCTL_TEST_LOG=str(self.root / 'missing.log'))
