@@ -60,4 +60,13 @@
       name: elf2-system-cache-probe
       env:
         ELF2_VERIFY_REUSE: "1"
+  vscode:
+    - docker:
+        image: cnbcool/default-dev-env:latest
+      services:
+        - vscode
+        - docker
+      stages:
+        - name: ls
+          script: ls -al
 
