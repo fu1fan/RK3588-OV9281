@@ -1,3 +1,30 @@
+"**":
+  push:
+    - name: Sync to GitHub
+      stages:
+        - name: Configure GitHub SSH on port 443
+          script: git config core.sshCommand 'ssh -o UserKnownHostsFile=/workspace/.cnb/github-known-hosts -o StrictHostKeyChecking=yes -o ConnectTimeout=30'
+        - name: Sync current branch and tags
+          image: tencentcom/git-sync
+          settingsFrom:
+            - https://cnb.cool/fu1fan/secrets/-/blob/main/rk3588-ov9281-github-sync.yml
+          settings:
+            target_url: ssh://git@ssh.github.com:443/fu1fan/RK3588-OV9281.git
+            branch: ${CNB_BRANCH}
+            push_tags: true
+  tag_push:
+    - name: Sync tags to GitHub
+      stages:
+        - name: Configure GitHub SSH on port 443
+          script: git config core.sshCommand 'ssh -o UserKnownHostsFile=/workspace/.cnb/github-known-hosts -o StrictHostKeyChecking=yes -o ConnectTimeout=30'
+        - name: Sync tags
+          image: tencentcom/git-sync
+          settingsFrom:
+            - https://cnb.cool/fu1fan/secrets/-/blob/main/rk3588-ov9281-github-sync.yml
+          settings:
+            target_url: ssh://git@ssh.github.com:443/fu1fan/RK3588-OV9281.git
+            push_tags: true
+
 "system-v*":
   tag_push:
     - &system_build
