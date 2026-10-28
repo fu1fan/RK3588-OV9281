@@ -19,6 +19,8 @@ WATCHDOG_BINARY = '/usr/bin/elf2-wdctl'
 WATCHDOG_SCRIPT = '/etc/init.d/S01watchdog'
 WIFI_SCRIPT = '/etc/init.d/S36wifistation'
 WIFI_TEMPLATE = '/etc/wifistation.conf.example'
+DISPLAY_FILES = ('/etc/elfboard_env.sh', '/etc/profile.d/weston.sh')
+DISPLAY_OVERLAY = SOURCE / 'buildroot/board/elfboard/elf2/fs-overlay'
 
 # The scripts must stay in this lexical order: rcS runs /etc/init.d/S??* in
 # name order, and the feeder has to be running before anything that can block.
@@ -124,6 +126,9 @@ def prepare(work, modules_stage, compiler=None):
                (watchdog, WATCHDOG_SCRIPT, 0o755),
                (wifi, WIFI_SCRIPT, 0o755),
                (template, WIFI_TEMPLATE, 0o644)]
+    overlay.extend((DISPLAY_OVERLAY / path.lstrip('/'), path,
+                    0o755 if path == '/etc/elfboard_env.sh' else 0o644)
+                   for path in DISPLAY_FILES)
     return overlay, build
 
 
@@ -142,6 +147,9 @@ def verify(fs):
             raise RuntimeError('Init script missing or not executable: ' + path)
     if not fs.exists(WIFI_TEMPLATE):
         raise RuntimeError('STA configuration template missing from rootfs')
+    for path in DISPLAY_FILES:
+        if fs.run('cat ' + path) != (DISPLAY_OVERLAY / path.lstrip('/')).read_text():
+            raise RuntimeError('Display configuration content mismatch: ' + path)
     # The device nodes the watchdog script depends on must exist afterwards.
     for path in ('/dev', '/etc/init.d', '/var/run'):
         if not fs.exists(path):

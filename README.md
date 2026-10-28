@@ -20,12 +20,12 @@
 
 | 问题 | 源码位置 | 镜像内落点 |
 |---|---|---|
-| 开机 40–90 秒看门狗复位 | `kernel/drivers/watchdog/dw_wdt.c`、`system/elf2-wdctl/` | `/usr/bin/elf2-wdctl`、`/etc/init.d/S01watchdog` |
+| 开机 40–90 秒看门狗复位 | `system/elf2-wdctl/`（保留原内核接管逻辑） | `/usr/bin/elf2-wdctl`、`/etc/init.d/S01watchdog` |
 | AX200 STA 不自动联网 | `system/init.d/S36wifistation`、`system/wifistation.conf.example` | `/etc/init.d/S36wifistation`、`/etc/wifistation.conf.example` |
 | `/dev/video11` 启流 ENOMEM / 零尺寸 dummy buffer | `kernel/drivers/media/platform/rockchip/cif/capture.c`、`kernel/drivers/media/i2c/ov9281.c` | 内核镜像 |
 
 看门狗喂狗程序在 CI 中用固定的 AArch64 工具链交叉编译，写入 rootfs 后会校验 ELF 架构、权限和
-`/proc` 可见的 pid 一致性。Wi-Fi STA 默认不启用：镜像里只有不含 SSID/密码的
+启动脚本语法及安装顺序。Wi-Fi STA 默认不启用：镜像里只有不含 SSID/密码的
 `/etc/wifistation.conf.example`，复制为 `/etc/wifistation.conf` 并填写后才在开机时联网。
 
 这些改动只在云端编译和镜像内容层面验证，尚未在开发板上做过复位稳定性、无线关联/DHCP 和

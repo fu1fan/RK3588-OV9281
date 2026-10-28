@@ -71,7 +71,15 @@ class API:
             except APIError:
                 if attempt==2:raise
                 time.sleep(3*(attempt+1))
-        asset=next(a for a in self.assets(binding) if a['name']==path.name)
+        # Upload confirmation can precede visibility in the asset listing.
+        for attempt in range(6):
+            asset = next((a for a in self.assets(binding) if a['name'] == path.name), None)
+            if asset is not None:
+                break
+            if attempt < 5:
+                time.sleep(2 * (attempt + 1))
+        else:
+            raise RuntimeError('Uploaded asset not visible after 6 queries: ' + path.name)
         if asset.get('size_in_byte',asset.get('size'))!=path.stat().st_size or asset.get('hash_value',asset.get('digest'))!=expected:
             raise RuntimeError('Remote asset checksum mismatch: '+path.name)
         print('Remote SHA256 verified:',path.name,flush=True)

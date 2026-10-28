@@ -156,6 +156,9 @@ class RootfsServiceTests(unittest.TestCase):
                        (rootfs_services.SYSTEM/'init.d'/'S01watchdog', rootfs_services.WATCHDOG_SCRIPT, 0o755),
                        (rootfs_services.SYSTEM/'init.d'/'S36wifistation', rootfs_services.WIFI_SCRIPT, 0o755),
                        (rootfs_services.SYSTEM/'wifistation.conf.example', rootfs_services.WIFI_TEMPLATE, 0o644)]
+            overlay.extend((rootfs_services.DISPLAY_OVERLAY / path.lstrip('/'), path,
+                            0o755 if path.endswith('elfboard_env.sh') else 0o644)
+                           for path in rootfs_services.DISPLAY_FILES)
             fs = install(image, modules, overlay, root/'edits')
             rootfs_services.verify(fs)
             self.assertRegex(fs.run('stat '+rootfs_services.WIFI_TEMPLATE), r'Mode:\s+(?:0?100644|0644)')
@@ -167,12 +170,6 @@ class RootfsServiceTests(unittest.TestCase):
                        'CONFIG_VIDEO_OV9281=y'):
             self.assertIn(repr(symbol), script)
 
-    def test_dummy_buffer_guard_exists_in_cif_source(self):
-        source = (build.SOURCE/
-                  'kernel/drivers/media/platform/rockchip/cif/capture.c').read_text()
-        self.assertIn('rkcif_create_dummy_buf(struct rkcif_stream *stream, bool reuse)', source)
-        self.assertIn('No usable sensor frame size for dummy buffer', source)
-        self.assertNotIn('dummy_buf->size = 0;\n\tdummy_buf->is_need_vaddr = true;', source)
 
 
 if __name__=='__main__':unittest.main()

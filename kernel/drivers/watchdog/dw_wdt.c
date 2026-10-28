@@ -55,17 +55,6 @@
 
 #define DW_WDT_DEFAULT_SECONDS	30
 
-/*
- * Timeout used when the hardware is still running after a warm reset or a
- * kexec and the driver has to take over an already armed counter. Those
- * counters may have been programmed by the bootloader with a TOP that is far
- * below any nominal 16s..2^31/rate range, so the value reported by
- * dw_wdt_get_timeout() does not identify the stage-1 bootloader setting.
- * Keep the driver in a range the hardware can actually reproduce once the
- * counter is re-armed, instead of failing every later set_timeout() call.
- */
-#define DW_WDT_TAKEOVER_SECONDS	30
-
 static const u32 dw_wdt_fix_tops[DW_WDT_NUM_TOPS] = {
 	DW_WDT_FIX_TOP(0), DW_WDT_FIX_TOP(1), DW_WDT_FIX_TOP(2),
 	DW_WDT_FIX_TOP(3), DW_WDT_FIX_TOP(4), DW_WDT_FIX_TOP(5),
@@ -675,13 +664,6 @@ static int dw_wdt_drv_probe(struct platform_device *pdev)
 	 */
 	if (dw_wdt_is_enabled(dw_wdt)) {
 		wdd->timeout = dw_wdt_get_timeout(dw_wdt);
-		if (wdd->timeout < wdd->min_timeout ||
-		    wdd->timeout * MSEC_PER_SEC > wdd->max_hw_heartbeat_ms) {
-			dev_warn(dev,
-				 "running watchdog reports an out of range timeout (%us), using %us\n",
-				 wdd->timeout, DW_WDT_TAKEOVER_SECONDS);
-			wdd->timeout = DW_WDT_TAKEOVER_SECONDS;
-		}
 		set_bit(WDOG_HW_RUNNING, &wdd->status);
 	} else {
 		wdd->timeout = DW_WDT_DEFAULT_SECONDS;

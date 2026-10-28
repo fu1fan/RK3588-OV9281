@@ -14,6 +14,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <linux/watchdog.h>
+#include <limits.h>
 #include <pthread.h>
 #include <signal.h>
 #include <stdarg.h>
@@ -31,6 +32,7 @@
 
 static volatile sig_atomic_t stop_requested;
 static volatile sig_atomic_t hang_requested;
+static volatile sig_atomic_t feed_failed;
 static int watchdog_fd = -1;
 static const char *device_path = DEFAULT_DEVICE;
 
@@ -78,9 +80,13 @@ static void *feeder(void *arg)
 
 	while (!stop_requested && !hang_requested) {
 		deadline_in(&next, interval);
-		if (ioctl(watchdog_fd, WDIOC_KEEPALIVE, 0) < 0)
+		if (ioctl(watchdog_fd, WDIOC_KEEPALIVE, 0) < 0) {
+			feed_failed = 1;
+			stop_requested = 1;
 			log_msg("WDIOC_KEEPALIVE on %s: %s", device_path,
 				strerror(errno));
+			break;
+		}
 		while (!stop_requested && !hang_requested && !reached(&next)) {
 			struct timespec slice;
 
@@ -97,7 +103,7 @@ static void *feeder(void *arg)
 	return NULL;
 }
 
-static int open_watchdog(unsigned timeout)
+static int open_watchdog(unsigned timeout, unsigned *interval)
 {
 	int fd, seconds = (int)timeout;
 
@@ -105,15 +111,44 @@ static int open_watchdog(unsigned timeout)
 	if (fd < 0)
 		return -1;
 	if (timeout && ioctl(fd, WDIOC_SETTIMEOUT, &seconds) < 0)
-		log_msg("WDIOC_SETTIMEOUT %u: %s (driver default kept)", timeout,
-			strerror(errno));
+		log_msg("WDIOC_SETTIMEOUT failed: %s; querying current timeout", strerror(errno));
+	/* GETTIMEOUT is authoritative, including after SETTIMEOUT failure. */
+	if (ioctl(fd, WDIOC_GETTIMEOUT, &seconds) < 0 || seconds < 2) {
+		log_msg("cannot determine a safe watchdog timeout");
+		close(fd);
+		errno = EINVAL;
+		return -1;
+	}
+	if (*interval > (unsigned)seconds / 2)
+		*interval = (unsigned)seconds / 2;
+	log_msg("actual timeout %ds, kick interval %us", seconds, *interval);
+	if (ioctl(fd, WDIOC_KEEPALIVE, 0) < 0) {
+		log_msg("initial keepalive failed: %s", strerror(errno));
+		close(fd);
+		return -1;
+	}
 	return fd;
+}
+
+static bool parse_seconds(const char *value, unsigned *result)
+{
+	char *end;
+	unsigned long parsed;
+
+	if (!value || !*value || *value == '-')
+		return false;
+	errno = 0;
+	parsed = strtoul(value, &end, 10);
+	if (errno || *end || parsed > INT_MAX)
+		return false;
+	*result = (unsigned)parsed;
+	return true;
 }
 
 static void usage(void)
 {
 	fputs("Usage: elf2-wdctl [-f] [-d DEVICE] [-t SECONDS] [-i SECONDS]\n"
-	      "  -f  stay in the foreground and log every kick\n"
+	      "  -f  stay in the foreground\n"
 	      "  -d  watchdog device node (default " DEFAULT_DEVICE ")\n"
 	      "  -t  hardware timeout in seconds (default 30)\n"
 	      "  -i  kick interval in seconds (default 10, must be < timeout)\n",
@@ -127,8 +162,11 @@ int main(int argc, char **argv)
 	unsigned timeout = DEFAULT_TIMEOUT, interval = DEFAULT_INTERVAL;
 	bool foreground = false;
 	pid_t child;
+	int ready[2] = { -1, -1 };
 
 	while (argc > 1) {
+		if (argv[1][0] != '-' || !argv[1][1] || argv[1][2])
+			goto bad;
 		switch (argv[1][1]) {
 		case 'f':
 			foreground = true;
@@ -143,14 +181,16 @@ int main(int argc, char **argv)
 		case 't':
 			if (!argv[2])
 				goto bad;
-			timeout = (unsigned)strtoul(argv[2], NULL, 10);
+			if (!parse_seconds(argv[2], &timeout))
+				goto bad;
 			argv++;
 			argc--;
 			break;
 		case 'i':
 			if (!argv[2])
 				goto bad;
-			interval = (unsigned)strtoul(argv[2], NULL, 10);
+			if (!parse_seconds(argv[2], &interval))
+				goto bad;
 			argv++;
 			argc--;
 			break;
@@ -163,7 +203,7 @@ int main(int argc, char **argv)
 	if (!interval || (timeout && interval >= timeout))
 		goto bad;
 
-	watchdog_fd = open_watchdog(timeout);
+	watchdog_fd = open_watchdog(timeout, &interval);
 	if (watchdog_fd < 0) {
 		log_msg("cannot open %s: %s", device_path, strerror(errno));
 		return 1;
@@ -178,24 +218,48 @@ int main(int argc, char **argv)
 	sigaction(SIGUSR1, &sa, NULL);
 	signal(SIGPIPE, SIG_IGN);
 
-	/* Fork only after the device is open; the descriptor belongs to the
-	 * parent, so the parent keeps everything and the child simply exits.
-	 */
+	/* Fork only after validating the device; the child inherits its fd. */
 	if (!foreground) {
+		if (pipe(ready) < 0) {
+			log_msg("readiness pipe: %s", strerror(errno));
+			return 1;
+		}
 		child = fork();
 		if (child < 0) {
 			log_msg("fork: %s", strerror(errno));
 			return 1;
 		}
-		if (child > 0)
-			return 0;
-		if (setsid() < 0)
+		if (child > 0) {
+			char status;
+			ssize_t count;
+
+			close(ready[1]);
+			do {
+				count = read(ready[0], &status, 1);
+			} while (count < 0 && errno == EINTR);
+			close(ready[0]);
+			close(watchdog_fd);
+			return count == 1 && status == 'R' ? 0 : 1;
+		}
+		close(ready[0]);
+		if (setsid() < 0) {
 			log_msg("setsid: %s", strerror(errno));
+			return 1;
+		}
 	}
 
 	if (pthread_create(&thread, NULL, feeder, &interval) != 0) {
 		log_msg("cannot start kick thread");
 		return 1;
+	}
+
+	if (!foreground) {
+		if (write(ready[1], "R", 1) != 1) {
+			stop_requested = 1;
+			pthread_join(thread, NULL);
+			return 1;
+		}
+		close(ready[1]);
 	}
 
 	/* No SA_RESTART: the absolute sleep below must return on a signal so
@@ -219,6 +283,12 @@ int main(int argc, char **argv)
 			clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &forever, NULL);
 	}
 
+	pthread_join(thread, NULL);
+	if (feed_failed) {
+		/* Leave the card armed so a broken feeder triggers recovery. */
+		close(watchdog_fd);
+		return 1;
+	}
 	log_msg("stopping");
 	/* Best effort: with nowayout the driver ignores this, which is fine -
 	 * the counter then resets the board once the TOP expires.
