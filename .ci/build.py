@@ -16,6 +16,7 @@ import time
 from fetch_deps import digest, restore
 from image import Ext4, install
 import rootfs_services
+import vulkan
 
 SOURCE = Path(__file__).resolve().parents[1]
 DIST = SOURCE / 'dist'
@@ -228,8 +229,14 @@ def build():
         # update.img through the normal repack step below.
         services, service_build = rootfs_services.prepare(work, stage, toolchain+'gcc')
         overlay.extend(services)
+        vulkan_files, vulkan_build = vulkan.prepare(work, toolchain + "gcc")
+        overlay.extend(vulkan_files)
         fs = install(image, stage/'lib/modules', overlay, work/'output/ci-rootfs.debugfs')
         rootfs_services.verify(fs)
+        vulkan.verify(fs, vulkan_files)
+        vulkan.bundle(vulkan_files, DIST / (prefix + "-vulkan-runtime.tar.gz"))
+        info["vulkan"] = {"version": vulkan.VERSION, "mali_revision": vulkan.MALI_REVISION}
+        shutil.rmtree(vulkan_build)
         identity = json.loads(fs.run('cat /etc/elf2-build-info.json'))
         if identity['commit'] != revision:
             raise RuntimeError('Rootfs identity mismatch')
