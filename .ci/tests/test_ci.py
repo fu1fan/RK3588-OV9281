@@ -156,6 +156,9 @@ class RootfsServiceTests(unittest.TestCase):
                        (rootfs_services.SYSTEM/'init.d'/'S01watchdog', rootfs_services.WATCHDOG_SCRIPT, 0o755),
                        (rootfs_services.SYSTEM/'init.d'/'S36wifistation', rootfs_services.WIFI_SCRIPT, 0o755),
                        (rootfs_services.SYSTEM/'wifistation.conf.example', rootfs_services.WIFI_TEMPLATE, 0o644)]
+            overlay.extend((rootfs_services.DISPLAY_OVERLAY / path.lstrip('/'), path,
+                            0o755 if path.endswith('elfboard_env.sh') else 0o644)
+                           for path in rootfs_services.DISPLAY_FILES)
             fs = install(image, modules, overlay, root/'edits')
             rootfs_services.verify(fs)
             self.assertRegex(fs.run('stat '+rootfs_services.WIFI_TEMPLATE), r'Mode:\s+(?:0?100644|0644)')

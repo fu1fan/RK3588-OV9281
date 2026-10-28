@@ -5,7 +5,7 @@
 export WL_OUTPUT_VERSION=3
 
 # Comment out this for atomic related functions, e.g. sprites
-export WESTON_DISABLE_ATOMIC=1
+# Atomic commits synchronize each output with its own vblank.
 # The env variables below can be overridden
 
 # HACK for old chromium, see:
@@ -13,7 +13,7 @@ export WESTON_DISABLE_ATOMIC=1
 export WL_OUTPUT_VERSION=3
 
 # Comment out this for atomic related functions, e.g. sprites
-export WESTON_DISABLE_ATOMIC=1
+# Atomic commits synchronize each output with its own vblank.
 
 # Increasing this can help to reduce tearing when dumping low-level DRM buffers
 export WESTON_DRM_MIN_BUFFERS=2
@@ -58,7 +58,7 @@ export WESTON_DRM_MIN_BUFFERS=2
 # export WESTON_DRM_VIRTUAL_SIZE=1024x768
 
 # Comment out these to disable mirror mode
-export WESTON_DRM_MIRROR=1
+# Mirror mode is enabled only by an explicit disp_type=sync setting.
 export WESTON_DRM_KEEP_RATIO=1
 export QT_QPA_PLATFORM=wayland
 export XDG_RUNTIME_DIR=/var/run
@@ -113,3 +113,7 @@ export WESTON_FREEZE_DISPLAY=/tmp/.freeze_weston
 # echo "output:HDMI-A-1:input=goodix-ts" > /tmp/.weston_drm.conf
 # echo "output:HDMI-A-1:refresh" >> /tmp/.weston_drm.conf
 
+
+# Clear legacy settings inherited from an earlier login shell.
+unset WESTON_DISABLE_ATOMIC WESTON_DRM_MIRROR
+export WESTON_DRM_PRIMARY=HDMI-A-1
