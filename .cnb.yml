@@ -29,6 +29,8 @@
   tag_push:
     - &system_build
       name: elf2-system
+      services:
+        - docker
       runner:
         tags: cnb:arch:amd64
         cpus: 32
@@ -66,6 +68,15 @@
         - name: Verify incremental reuse when requested
           script: python3 .ci/reuse.py
           timeout: 60m
+        - name: Export and publish application SDK
+          script: |
+            set -eu
+            python3 .ci/export_sdk.py
+            SDK_IMAGE="${CNB_DOCKER_REGISTRY}/${CNB_REPO_SLUG_LOWERCASE}/app-sdk:build-${CNB_BUILD_ID}"
+            docker build --platform linux/amd64 -t "$SDK_IMAGE" sdk-image
+            docker push "$SDK_IMAGE"
+            docker inspect --format '{{index .RepoDigests 0}}' "$SDK_IMAGE"
+          timeout: 30m
         - name: Publish verified artifacts
           script: python3 .ci/publish.py
           timeout: 30m
@@ -77,6 +88,9 @@
           timeout: 10m
           allowFailure: true
 "$":
+  api_trigger_sdk:
+    - <<: *system_build
+      name: elf2-system-sdk
   web_trigger_clean:
     - <<: *system_build
       name: elf2-system-clean
