@@ -44,6 +44,7 @@ def export():
     compiler = sdk / 'toolchain/bin/aarch64-none-linux-gnu-gcc'
     base = subprocess.check_output([str(compiler), '-print-sysroot'], text=True).strip()
     shutil.copytree(base, sdk / 'sysroot', symlinks=True)
+    relativize(sdk / 'sysroot')
     image = work / 'output/buildroot/images/rootfs.ext4'
     # Runtime libraries and target-provided development files come from this
     # exact final rootfs, including the Vulkan overlay installed by build.py.
@@ -56,7 +57,8 @@ def export():
         identity = json.loads((extracted / 'etc/elf2-build-info.json').read_text())
         if identity['commit'] != info['commit']:
             raise RuntimeError('Final rootfs identity mismatch')
-        for relative in ('lib', 'usr/lib', 'usr/include'):
+        relativize(extracted)
+        for relative in ('lib', 'lib64', 'usr/lib', 'usr/lib64', 'usr/include'):
             source = extracted / relative
             if source.is_dir():
                 run('rsync', '-a', str(source) + '/', str(sdk / 'sysroot' / relative) + '/')
