@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[2]
 class USBVideoTests(unittest.TestCase):
     def test_prepare_is_idempotent_when_function_is_bound(self):
         source = (ROOT / 'external/rkscript/usbdevice').read_text()
-        functions = source.split('# ---- USB video network', 1)[1].split('# ---- ntb', 1)[0]
+        functions = source.split('# ---- USB video network', 1)[1].split('\n', 1)[1].split('# ---- ntb', 1)[0]
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / 'f-ncm.0').symlink_to('bound-function')
@@ -22,7 +22,7 @@ class USBVideoTests(unittest.TestCase):
 
     def test_unbound_prepare_uses_kernel_ifname_pattern(self):
         source = (ROOT / 'external/rkscript/usbdevice').read_text()
-        functions = source.split('# ---- USB video network', 1)[1].split('# ---- ntb', 1)[0]
+        functions = source.split('# ---- USB video network', 1)[1].split('\n', 1)[1].split('# ---- ntb', 1)[0]
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / 'serialnumber').write_text('3bcb9deb719aff6f\n')
