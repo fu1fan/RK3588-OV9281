@@ -202,6 +202,8 @@ def build():
         before = object_state(work)
         command(['./build.sh', 'elf2_sdkbuild_defconfig'], cwd=work, env=env)
         command(['./build.sh', 'all'], cwd=work, env=env)
+        if 'CONFIG_USB_CONFIGFS_NCM=y' not in (work/'kernel/.config').read_text().splitlines():
+            raise RuntimeError('USB NCM is missing from the built kernel')
         release = (work/'kernel/include/config/kernel.release').read_text().strip()
         stage = work/'output/ci-modules'
         if stage.exists():
