@@ -261,7 +261,9 @@ adb_stop()
 # ---- USB video network (NCM; management remains on Wi-Fi)
 ncm_prepare()
 {
-    echo vrusb0 > ifname
+    # udev update events also call prepare on an already-bound function.
+    [ ! -L "$USB_CONFIGS_DIR/f-ncm.0" ] || return 0
+    echo 'vrusb%d' > ifname
     # Local MACs are stable per board; do not reuse the Wi-Fi address.
     serial=$(cat "$USB_GADGET_STRINGS_DIR/serialnumber" | tr -cd '0-9a-fA-F' | tail -c 10)
     [ ${#serial} -eq 10 ] || serial=0000000001
@@ -279,7 +281,8 @@ ncm_start()
     ip link set vrusb0 up
     ip addr replace 192.168.77.1/24 dev vrusb0
     # DHCP only, no DNS/default-route advertisement; never take over Mac Wi-Fi.
-    /usr/sbin/dnsmasq --conf-file=/etc/usb-video-dnsmasq.conf
+    /sbin/start-stop-daemon -S -q -o -p /var/run/usb-video-dnsmasq.pid \
+        -x /usr/sbin/dnsmasq -- --conf-file=/etc/usb-video-dnsmasq.conf
 }
 
 ncm_stop()
