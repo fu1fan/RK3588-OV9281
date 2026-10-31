@@ -159,6 +159,7 @@ class RootfsServiceTests(unittest.TestCase):
             overlay.extend((rootfs_services.DISPLAY_OVERLAY / path.lstrip('/'), path,
                             0o755 if path.endswith('elfboard_env.sh') else 0o644)
                            for path in rootfs_services.DISPLAY_FILES)
+            overlay.extend(rootfs_services.USB_FILES)
             fs = install(image, modules, overlay, root/'edits')
             rootfs_services.verify(fs)
             self.assertRegex(fs.run('stat '+rootfs_services.WIFI_TEMPLATE), r'Mode:\s+(?:0?100644|0644)')

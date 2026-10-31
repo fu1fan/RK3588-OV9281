@@ -1242,6 +1242,9 @@ static int ov9281_initialize_controls(struct ov9281 *ov9281)
 
 	handler = &ov9281->ctrl_handler;
 	mode = ov9281->cur_mode;
+	/* STREAMON may precede any userspace S_FMT/S_FRAME_INTERVAL call. */
+	ov9281->cur_fps = mode->max_fps;
+	ov9281->cur_vts = mode->vts_def;
 	ret = v4l2_ctrl_handler_init(handler, 8);
 	if (ret)
 		return ret;

@@ -19,6 +19,11 @@ WATCHDOG_BINARY = '/usr/bin/elf2-wdctl'
 WATCHDOG_SCRIPT = '/etc/init.d/S01watchdog'
 WIFI_SCRIPT = '/etc/init.d/S36wifistation'
 WIFI_TEMPLATE = '/etc/wifistation.conf.example'
+USB_FILES = (
+    (SOURCE / 'external/rkscript/usbdevice', '/usr/bin/usbdevice', 0o755),
+    (SYSTEM / 'usb-video.config', '/etc/.usb_config', 0o644),
+    (SYSTEM / 'usb-video-dnsmasq.conf', '/etc/usb-video-dnsmasq.conf', 0o644),
+)
 DISPLAY_FILES = ('/etc/elfboard_env.sh', '/etc/profile.d/weston.sh')
 DISPLAY_OVERLAY = SOURCE / 'buildroot/board/elfboard/elf2/fs-overlay'
 
@@ -129,6 +134,8 @@ def prepare(work, modules_stage, compiler=None):
     overlay.extend((DISPLAY_OVERLAY / path.lstrip('/'), path,
                     0o755 if path == '/etc/elfboard_env.sh' else 0o644)
                    for path in DISPLAY_FILES)
+    check_script(USB_FILES[0][0], required=('ncm_prepare', 'ncm_start'))
+    overlay.extend(USB_FILES)
     return overlay, build
 
 
@@ -150,6 +157,9 @@ def verify(fs):
     for path in DISPLAY_FILES:
         if fs.run('cat ' + path) != (DISPLAY_OVERLAY / path.lstrip('/')).read_text():
             raise RuntimeError('Display configuration content mismatch: ' + path)
+    for source, target, mode in USB_FILES:
+        if fs.run('cat ' + target) != source.read_text():
+            raise RuntimeError('USB network configuration mismatch: ' + target)
     # The device nodes the watchdog script depends on must exist afterwards.
     for path in ('/dev', '/etc/init.d', '/var/run'):
         if not fs.exists(path):
